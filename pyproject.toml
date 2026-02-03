@@ -8,3 +8,10 @@ dependencies = [
     "networkx>=3.6.1",
     "pyside6>=6.10.2",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.14",
+    "ty>=0.0.14",
+]
