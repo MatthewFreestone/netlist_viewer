@@ -28,29 +28,64 @@ class NetlistBuilder():
         pass
 
     def handle_line(self, line: str):
+        if (SyntaxHelpers.is_comment(line)):
+            return
         inst = Instance.from_line(line)
         self.scope.append(inst)
+
+class SyntaxHelpers:
+    def is_comment(line: str) -> bool:
+        stripped = line.strip()
+        if len(stripped) == 0:
+            return True
+        if stripped[0] == '#':
+            return True
+        return False
 
 @dataclass
 class Instance:
     primitive: Primitive
     nets: list[str]
-    parameters: dict[str, str]
+    parameters: Parameters
     name: str
 
     def from_line(line: str) -> Instance:
-        tokenized = line.strip().split()
+        tokenized = line.strip().split() #TODO: Handle parenthesized expresions with spaces
         if len(tokenized) < 2:
             raise SpiceFormatError(line, "Unable to split into >= 2 tokens")
-        prim = Primitive.from_name(tokenized[0])
-        port1 = tokenized[1]
-        port2 = tokenized[2]
-        parameters = dict()
-        for param in tokenized[3:]:
-            k, sep, v = param.partition('=')
-            if sep != '':
-                parameters[k] = v
-        return Instance(prim, [port1, port2], parameters, tokenized[0])
+        name_token, *rest = tokenized
+        prim: Primitive = Primitive.from_name(name_token)
+        if prim == Primitive.UNKNOWN:
+            raise SpiceFormatError(line, f"Unknown primitive for inst '{name_token}'")
+        n_terminal = prim.terminal_count()
+        if len(rest) < n_terminal:
+            raise SpiceFormatError(line, "Not enough nets provided")
+
+        nets = rest[:n_terminal]
+        parameters = Parameters()
+        for param in rest[n_terminal:]:
+            parameters.add(param)
+        return Instance(prim, nets, parameters, name_token)
+
+class Parameters:
+    keys: set[str]
+    unkeyed: list[str]
+    keyed: list[tuple[str, str]]
+
+    def __init__(self):
+        self.keys = set()
+        self.keyed = []
+        self.unkeyed = []
+
+    def add(self, param: str):
+        k, sep, v = param.partition('=')
+        if sep == '=':
+            if k in self.keys:
+                raise SpiceFormatError(param, "Unable to handle duplicate keys")
+            self.keys.add(k)
+            self.keyed.append((k, v))
+        else:
+            self.unkeyed.append(k)
 
 class Primitive(enum.Enum):
     RES = 'R'
@@ -59,16 +94,28 @@ class Primitive(enum.Enum):
     ISOURCE = 'I'
     UNKNOWN = '?'
 
+    def terminal_count(self) -> int:
+        match self:
+            case Primitive.RES:
+                return 2
+            case Primitive.CAP:
+                return 2
+            case Primitive.ISOURCE:
+                return 2
+            case Primitive.VSOURCE:
+                return 2
+        return -1
+
     def from_name(name: str) -> Primitive:
         if len(name) == 0:
-            return Primitive.UNKNOWN
-        match name[0]:
-            case Primitive.RES:
+            raise SpiceFormatError(name, "No name provided")
+        match name[0].upper():
+            case Primitive.RES.value:
                 return Primitive.RES
-            case Primitive.CAP:
+            case Primitive.CAP.value:
                 return Primitive.CAP
-            case Primitive.ISOURCE:
+            case Primitive.ISOURCE.value:
                 return Primitive.ISOURCE
-            case Primitive.VSOURCE:
+            case Primitive.VSOURCE.value:
                 return Primitive.VSOURCE
         return Primitive.UNKNOWN
