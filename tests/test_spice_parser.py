@@ -1,10 +1,11 @@
 import pytest
+from src.netlist_viewer.layout import to_nx_graph
 from src.netlist_viewer.spice_parser import Primitive, SpiceParser, SpiceFormatError
 
 def test_parse_resistor():
     netlist = ["R1 1 0 10k param=10f"]
     parser = SpiceParser()
-    components = parser.parse(netlist)
+    components = parser.parse(netlist).instances
     
     assert len(components) == 1
     assert components[0].name == "R1" 
@@ -25,13 +26,22 @@ def sample_circuit() -> list[str]:
     return """
     R1 1 2 1k
     C1 2 0 10u
+    C2 2 0 10u
     V1 1 0 DC 5
     """.splitlines()
 
 def test_full_circuit(sample_circuit):
     parser = SpiceParser()
-    components = parser.parse(sample_circuit)
-    assert len(components) == 3
+    components = parser.parse(sample_circuit).instances
+    assert len(components) == 4
     assert components[0].primitive == Primitive.RES
     assert components[1].primitive == Primitive.CAP
-    assert components[2].primitive == Primitive.VSOURCE
+    assert components[2].primitive == Primitive.CAP
+    assert components[3].primitive == Primitive.VSOURCE
+
+def test_nx(sample_circuit):
+    parser = SpiceParser()
+    components = parser.parse(sample_circuit)
+    G = to_nx_graph(components)
+    assert len(G.nodes) == 6 # 4 inst, net 2, net 0 split up split up
+    assert len(G.edges) == 7 # R1V1, R1-2, C1-2, C1-0, C2-0, C2-2, V1-0

@@ -13,18 +13,28 @@ class SpiceFormatError(BaseException):
         self.add_note(f"{reason} @ {line}")
 
 class SpiceParser():
-    def parse(self, netlist: list[str]) -> list[Instance]:
+    def parse(self, netlist: list[str]) -> Netlist:
         builder = NetlistBuilder()  
         for line in netlist:
             builder.handle_line(line)
-        return builder.scope
+        result = Netlist()
+        result.instances = builder.scope
+        result.global_nets = builder.global_nets
+        return result
+    
+class Netlist:
+    instances: list[Instance]
+    subckts: dict[str, list[Instance]]
+    global_nets: list[str]
 
 class NetlistBuilder():
     build_stack: list
     scope: list[Instance]
+    global_nets: list[str]
     def __init__(self):
         self.scope = []
         self.build_stack = []
+        self.global_nets = ['0']
         pass
 
     def handle_line(self, line: str):
