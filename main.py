@@ -1,4 +1,4 @@
-from src.netlist_viewer.layout import to_nx_graph
+from src.netlist_viewer.layout import PlacedNet, add_spring_locations, to_nx_graph, Point
 from src.netlist_viewer.gui import main
 from src.netlist_viewer.spice_parser import SpiceParser
 import matplotlib.pyplot as plt
@@ -6,24 +6,27 @@ import networkx as nx
 import numpy as np
 
 if __name__ == "__main__":
-    # main.main()
-
     netlist = """
     R1 1 2 1k
+    R2 2 3 1k
+    R3 3 0 1k
     C1 2 0 10u
     C2 2 0 10u
+    C3 2 0 10u
     V1 1 0 DC 5""".splitlines()
     parser = SpiceParser()
     components = parser.parse(netlist)
-    G = to_nx_graph(components)
-    pos = nx.spring_layout(G)
-    nodes = np.array([v for k,v in pos.items()])
+    placed = add_spring_locations(components)
     fig, ax = plt.subplots()
-    ax.scatter(nodes[:,0], nodes[:, 1])
-    for edge in G.edges:
-        start = pos[edge[0]]
-        end = pos[edge[1]]
-        ax.plot((start[0], end[0]), (start[1], end[1]))
+    x = [i.location.x for i in placed.instances]
+    y = [i.location.y for i in placed.instances]
+    ax.scatter(x, y)
+    for inst in placed.instances:
+        ax.text(inst.location.x, inst.location.y, inst.instance.name)
+    for edge in placed.edges:
+        start = placed.get_node(edge[0]).location
+        end = placed.get_node(edge[1]).location
+        ax.plot((start.x, end.x), (start.y, end.y))
     plt.show()
     
     # nodes = [v for k,v in pos.items() if type(k) is int]

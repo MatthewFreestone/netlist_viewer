@@ -1,3 +1,4 @@
+from typing import LiteralString
 import pytest
 from src.netlist_viewer.layout import to_nx_graph
 from src.netlist_viewer.spice_parser import Primitive, SpiceParser, SpiceFormatError
@@ -21,7 +22,7 @@ def test_parse_invalid_syntax():
 
 
 @pytest.fixture
-def sample_circuit() -> list[str]:
+def sample_circuit() -> list[LiteralString]:
     """Reusable test data"""
     return """
     R1 1 2 1k
