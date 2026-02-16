@@ -1,7 +1,7 @@
 from typing import LiteralString
 import pytest
-from src.netlist_viewer.layout import NetlistGraph
-from src.netlist_viewer.spice_parser import Primitive, SpiceParser, SpiceFormatError
+from netlist_viewer.layout import NetlistGraph
+from netlist_viewer.spice_parser import Primitive, SpiceParser, SpiceFormatError
 
 
 def test_parse_resistor():

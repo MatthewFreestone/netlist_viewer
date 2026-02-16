@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
+from netlist_viewer.core_types import Number
 
 
 class PinSide(Enum):
@@ -16,8 +17,8 @@ class Pin:
     """A connection point on a symbol."""
 
     name: str
-    x: float
-    y: float
+    x: Number
+    y: Number
     side: PinSide = PinSide.LEFT
 
 
@@ -26,8 +27,8 @@ class SymbolDef:
     """Declarative symbol definition - geometry and pins."""
 
     name: str
-    width: float
-    height: float
+    width: Number
+    height: Number
     pins: list[Pin]
     shapes: list[dict] = field(default_factory=list)
 
@@ -182,9 +183,9 @@ BJT = SymbolDef(
     width=40,
     height=50,
     pins=[
-        Pin("1", 0, -25, PinSide.TOP),     # Collector
-        Pin("2", -20, 0, PinSide.LEFT),    # Base
-        Pin("3", 0, 25, PinSide.BOTTOM),   # Emitter
+        Pin("1", 0, -25, PinSide.TOP),  # Collector
+        Pin("2", -20, 0, PinSide.LEFT),  # Base
+        Pin("3", 0, 25, PinSide.BOTTOM),  # Emitter
     ],
     shapes=[
         # Collector lead
@@ -213,10 +214,10 @@ MOSFET = SymbolDef(
     width=40,
     height=60,
     pins=[
-        Pin("1", 0, -30, PinSide.TOP),     # Drain
-        Pin("2", -20, 0, PinSide.LEFT),    # Gate
-        Pin("3", 0, 30, PinSide.BOTTOM),   # Source
-        Pin("4", 10, 0, PinSide.RIGHT),    # Bulk
+        Pin("1", 0, -30, PinSide.TOP),  # Drain
+        Pin("2", -20, 0, PinSide.LEFT),  # Gate
+        Pin("3", 0, 30, PinSide.BOTTOM),  # Source
+        Pin("4", 10, 0, PinSide.RIGHT),  # Bulk
     ],
     shapes=[
         # Drain lead
@@ -252,9 +253,9 @@ JFET = SymbolDef(
     width=40,
     height=50,
     pins=[
-        Pin("1", 0, -25, PinSide.TOP),     # Drain
-        Pin("2", -20, 0, PinSide.LEFT),    # Gate
-        Pin("3", 0, 25, PinSide.BOTTOM),   # Source
+        Pin("1", 0, -25, PinSide.TOP),  # Drain
+        Pin("2", -20, 0, PinSide.LEFT),  # Gate
+        Pin("3", 0, 25, PinSide.BOTTOM),  # Source
     ],
     shapes=[
         # Drain lead

@@ -6,12 +6,12 @@ import logging
 import time
 import networkx as nx
 
-from src.netlist_viewer.spice_parser import Instance, Netlist
+from netlist_viewer.spice_parser import Instance, Netlist
+from netlist_viewer.core_types import NodeReference, Number
 
 NET_INDICATOR = "$NET$"
 
 # nodes added to a net are str, actual instances are int
-type NodeReference = str | int
 
 
 @dataclass
@@ -22,7 +22,7 @@ class NetlistGraph:
     class TopologyEdge:
         start: NodeReference
         end: NodeReference
-        weight: float
+        weight: Number
         net: str
 
     @dataclass

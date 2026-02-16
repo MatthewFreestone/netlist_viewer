@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF
 
-from .symbols import SymbolDef, Pin
+from netlist_viewer.gui.symbols import SymbolDef, Pin
 
 
 class WireItem(QGraphicsLineItem):

@@ -1,7 +1,7 @@
 [project]
 name = "netlist_viewer"
 version = "0.1.0"
-description = "Add your description here"
+description = "Visualize SPICE netlists as interactive circuit diagrams"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -10,6 +10,13 @@ dependencies = [
     "pyside6>=6.10.2",
     "scipy>=1.17.0",
 ]
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+netlist_viewer = "netlist_viewer.gui.main:cli_main"
 
 [dependency-groups]
 dev = [
