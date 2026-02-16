@@ -196,6 +196,15 @@ class SymbolItem(QGraphicsItem):
                 painter.drawPolygon(QPolygonF(points))
                 painter.setBrush(QColor(0, 0, 0, 0))  # reset
 
+            case "arc":
+                cx, cy = self._rotate_point(*shape["center"])
+                r = shape["r"]
+                start = shape["start"] + self.orient
+                span = shape["span"]
+                # Qt uses 1/16th degree units
+                rect = QRectF(cx - r, cy - r, r * 2, r * 2)
+                painter.drawArc(rect, int(start * 16), int(span * 16))
+
             case "terminal":
                 px, py = self._rotate_point(*shape["pos"])
                 painter.setBrush(color)

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Sequence
 from dataclasses import dataclass
 import enum
 import logging
@@ -17,7 +18,7 @@ class SpiceFormatError(BaseException):
 
 
 class SpiceParser:
-    def parse(self, syntax: str | list[str]) -> Netlist:
+    def parse(self, syntax: str | Sequence[str]) -> Netlist:
         start_time = time.time()
         builder = NetlistBuilder()
         if isinstance(syntax, str):
@@ -120,32 +121,32 @@ class Parameters:
 class Primitive(enum.Enum):
     RES = "R"
     CAP = "C"
+    IND = "L"
+    DIODE = "D"
+    BJT = "Q"
+    MOSFET = "M"
+    JFET = "J"
     VSOURCE = "V"
     ISOURCE = "I"
     UNKNOWN = "?"
 
     def terminal_count(self) -> int:
         match self:
-            case Primitive.RES:
+            case Primitive.RES | Primitive.CAP | Primitive.IND | Primitive.DIODE:
                 return 2
-            case Primitive.CAP:
+            case Primitive.ISOURCE | Primitive.VSOURCE:
                 return 2
-            case Primitive.ISOURCE:
-                return 2
-            case Primitive.VSOURCE:
-                return 2
+            case Primitive.BJT | Primitive.JFET:
+                return 3
+            case Primitive.MOSFET:
+                return 4
         return -1
 
     def from_name(name: str) -> Primitive:
         if len(name) == 0:
             raise SpiceFormatError(name, "No name provided")
-        match name[0].upper():
-            case Primitive.RES.value:
-                return Primitive.RES
-            case Primitive.CAP.value:
-                return Primitive.CAP
-            case Primitive.ISOURCE.value:
-                return Primitive.ISOURCE
-            case Primitive.VSOURCE.value:
-                return Primitive.VSOURCE
+        prefix = name[0].upper()
+        for prim in Primitive:
+            if prim.value == prefix and prim != Primitive.UNKNOWN:
+                return prim
         return Primitive.UNKNOWN

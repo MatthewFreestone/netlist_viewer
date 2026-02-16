@@ -7,6 +7,11 @@ from src.netlist_viewer.gui.symbol_item import SymbolItem, WireItem, NetNodeItem
 from src.netlist_viewer.gui.symbols import (
     RESISTOR,
     CAPACITOR,
+    INDUCTOR,
+    DIODE,
+    BJT,
+    MOSFET,
+    JFET,
     VOLTAGE_SOURCE,
     CURRENT_SOURCE,
 )
@@ -16,10 +21,15 @@ from beartype.claw import beartype_this_package
 
 beartype_this_package()
 
-# grab symbol views for all of the defined primitives
+# Map primitive types to symbol definitions
 PRIMITIVE_SYMBOLS = {
     Primitive.RES: RESISTOR,
     Primitive.CAP: CAPACITOR,
+    Primitive.IND: INDUCTOR,
+    Primitive.DIODE: DIODE,
+    Primitive.BJT: BJT,
+    Primitive.MOSFET: MOSFET,
+    Primitive.JFET: JFET,
     Primitive.VSOURCE: VOLTAGE_SOURCE,
     Primitive.ISOURCE: CURRENT_SOURCE,
 }
