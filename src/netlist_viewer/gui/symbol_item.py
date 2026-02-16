@@ -1,6 +1,12 @@
 """Generic symbol renderer for circuit components."""
 
-from PySide6.QtWidgets import QGraphicsItem, QGraphicsTextItem, QGraphicsLineItem, QStyleOptionGraphicsItem, QWidget
+from PySide6.QtWidgets import (
+    QGraphicsItem,
+    QGraphicsTextItem,
+    QGraphicsLineItem,
+    QStyleOptionGraphicsItem,
+    QWidget,
+)
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF
 
@@ -10,8 +16,13 @@ from .symbols import SymbolDef, Pin
 class WireItem(QGraphicsLineItem):
     """A wire connecting two graphics items, optionally at specific pins."""
 
-    def __init__(self, start_item: QGraphicsItem, end_item: QGraphicsItem,
-                 start_pin: str | None = None, end_pin: str | None = None):
+    def __init__(
+        self,
+        start_item: QGraphicsItem,
+        end_item: QGraphicsItem,
+        start_pin: str | None = None,
+        end_pin: str | None = None,
+    ):
         super().__init__()
         assert isinstance(start_pin, str) or isinstance(end_pin, str)
         self.start_item = start_item
@@ -52,7 +63,13 @@ class NetNodeItem(QGraphicsItem):
     def boundingRect(self) -> QRectF:
         return QRectF(-5, -5, 10, 10)
 
-    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, /, widget: QWidget | None = None) -> None:
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionGraphicsItem,
+        /,
+        widget: QWidget | None = None,
+    ) -> None:
         painter.setPen(QPen(QColor(100, 100, 100), 1))
         painter.setBrush(QColor(150, 150, 150))
         painter.drawEllipse(QPointF(0, 0), 4, 4)
@@ -71,8 +88,15 @@ class NetNodeItem(QGraphicsItem):
 class SymbolItem(QGraphicsItem):
     """Generic renderer for any SymbolDef."""
 
-    def __init__(self, symbol: SymbolDef, name: str = "", params: str = "",
-                 x: float = 0, y: float = 0, orient: int = 0):
+    def __init__(
+        self,
+        symbol: SymbolDef,
+        name: str = "",
+        params: str = "",
+        x: float = 0,
+        y: float = 0,
+        orient: int = 0,
+    ):
         super().__init__()
         self.symbol = symbol
         self.name = name
@@ -134,9 +158,15 @@ class SymbolItem(QGraphicsItem):
         if self.orient in (90, 270):
             w, h = h, w
         margin = 5
-        return QRectF(-w/2 - margin, -h/2 - margin, w + 2*margin, h + 2*margin)
+        return QRectF(-w / 2 - margin, -h / 2 - margin, w + 2 * margin, h + 2 * margin)
 
-    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, /, widget: QWidget | None = None) -> None:
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionGraphicsItem,
+        /,
+        widget: QWidget | None = None,
+    ) -> None:
         color = QColor(255, 0, 0) if self.isSelected() else QColor(0, 0, 0)
         pen = QPen(color, 2)
         painter.setPen(pen)

@@ -8,16 +8,18 @@ import time
 class SpiceFormatError(BaseException):
     line: str
     reason: str
+
     def __init__(self, line, reason, *args):
         self.line = line
         self.reason = reason
         super().__init__(*args)
         self.add_note(f"{reason} @ {line}")
 
-class SpiceParser():
+
+class SpiceParser:
     def parse(self, syntax: str | list[str]) -> Netlist:
         start_time = time.time()
-        builder = NetlistBuilder()  
+        builder = NetlistBuilder()
         if isinstance(syntax, str):
             syntax = syntax.splitlines()
 
@@ -28,22 +30,25 @@ class SpiceParser():
         result.instances = builder.scope
         result.global_nets = builder.global_nets
         end_time = time.time()
-        logging.info("Parsed netlist in %f s", end_time-start_time)
+        logging.info("Parsed netlist in %f s", end_time - start_time)
         return result
-    
+
+
 class Netlist:
     instances: list[Instance]
     subckts: dict[str, list[Instance]]
     global_nets: list[str]
 
-class NetlistBuilder():
+
+class NetlistBuilder:
     build_stack: list
     scope: list[Instance]
     global_nets: list[str]
+
     def __init__(self):
         self.scope = []
         self.build_stack = []
-        self.global_nets = ['0']
+        self.global_nets = ["0"]
         pass
 
     def handle_line(self, line: str):
@@ -52,14 +57,16 @@ class NetlistBuilder():
         inst = Instance.from_line(line)
         self.scope.append(inst)
 
+
 class SyntaxHelpers:
     def is_comment(line: str) -> bool:
         stripped = line.strip()
         if len(stripped) == 0:
             return True
-        if stripped[0] == '#' or stripped[0] == '*':
+        if stripped[0] == "#" or stripped[0] == "*":
             return True
         return False
+
 
 @dataclass
 class Instance:
@@ -69,7 +76,9 @@ class Instance:
     name: str
 
     def from_line(line: str) -> Instance:
-        tokenized = line.strip().split() #TODO: Handle parenthesized expresions with spaces
+        tokenized = (
+            line.strip().split()
+        )  # TODO: Handle parenthesized expresions with spaces
         if len(tokenized) < 2:
             raise SpiceFormatError(line, "Unable to split into >= 2 tokens")
         name_token, *rest = tokenized
@@ -86,6 +95,7 @@ class Instance:
             parameters.add(param)
         return Instance(prim, nets, parameters, name_token)
 
+
 class Parameters:
     keys: set[str]
     unkeyed: list[str]
@@ -97,8 +107,8 @@ class Parameters:
         self.unkeyed = []
 
     def add(self, param: str):
-        k, sep, v = param.partition('=')
-        if sep == '=':
+        k, sep, v = param.partition("=")
+        if sep == "=":
             if k in self.keys:
                 raise SpiceFormatError(param, "Unable to handle duplicate keys")
             self.keys.add(k)
@@ -106,12 +116,13 @@ class Parameters:
         else:
             self.unkeyed.append(k)
 
+
 class Primitive(enum.Enum):
-    RES = 'R'
-    CAP = 'C'
-    VSOURCE = 'V'
-    ISOURCE = 'I'
-    UNKNOWN = '?'
+    RES = "R"
+    CAP = "C"
+    VSOURCE = "V"
+    ISOURCE = "I"
+    UNKNOWN = "?"
 
     def terminal_count(self) -> int:
         match self:

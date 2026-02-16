@@ -14,6 +14,7 @@ class PinSide(Enum):
 @dataclass
 class Pin:
     """A connection point on a symbol."""
+
     name: str
     x: float
     y: float
@@ -23,6 +24,7 @@ class Pin:
 @dataclass
 class SymbolDef:
     """Declarative symbol definition - geometry and pins."""
+
     name: str
     width: float
     height: float
@@ -40,10 +42,19 @@ RESISTOR = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),
     ],
     shapes=[
-        {"type": "polyline", "points": [
-            (-25, 0), (-20, -8), (-12, 8), (-4, -8),
-            (4, 8), (12, -8), (20, 8), (25, 0)
-        ]},
+        {
+            "type": "polyline",
+            "points": [
+                (-25, 0),
+                (-20, -8),
+                (-12, 8),
+                (-4, -8),
+                (4, 8),
+                (12, -8),
+                (20, 8),
+                (25, 0),
+            ],
+        },
         {"type": "terminal", "pos": (-25, 0)},
         {"type": "terminal", "pos": (25, 0)},
     ],
@@ -78,7 +89,7 @@ VOLTAGE_SOURCE = SymbolDef(
     shapes=[
         {"type": "circle", "center": (0, 0), "r": 15},
         {"type": "line", "p1": (-25, 0), "p2": (-15, 0)},  # left lead
-        {"type": "line", "p1": (15, 0), "p2": (25, 0)},    # right lead
+        {"type": "line", "p1": (15, 0), "p2": (25, 0)},  # right lead
         # Plus sign
         {"type": "line", "p1": (-10, 0), "p2": (-4, 0)},
         {"type": "line", "p1": (-7, -3), "p2": (-7, 3)},
@@ -100,7 +111,7 @@ CURRENT_SOURCE = SymbolDef(
     shapes=[
         {"type": "circle", "center": (0, 0), "r": 15},
         {"type": "line", "p1": (-25, 0), "p2": (-15, 0)},  # left lead
-        {"type": "line", "p1": (15, 0), "p2": (25, 0)},    # right lead
+        {"type": "line", "p1": (15, 0), "p2": (25, 0)},  # right lead
         # Arrow inside
         {"type": "line", "p1": (-8, 0), "p2": (8, 0)},
         {"type": "polygon", "points": [(8, 0), (3, -4), (3, 4)], "filled": True},

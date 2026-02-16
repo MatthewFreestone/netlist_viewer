@@ -4,10 +4,16 @@ import sys
 from PySide6 import QtCore, QtWidgets, QtGui
 
 from src.netlist_viewer.gui.symbol_item import SymbolItem, WireItem, NetNodeItem
-from src.netlist_viewer.gui.symbols import RESISTOR, CAPACITOR, VOLTAGE_SOURCE, CURRENT_SOURCE
+from src.netlist_viewer.gui.symbols import (
+    RESISTOR,
+    CAPACITOR,
+    VOLTAGE_SOURCE,
+    CURRENT_SOURCE,
+)
 from src.netlist_viewer.layout import PlacedInstance, PlacedNetlist, NET_INDICATOR
 from src.netlist_viewer.spice_parser import Primitive
 from beartype.claw import beartype_this_package
+
 beartype_this_package()
 
 # grab symbol views for all of the defined primitives
@@ -33,7 +39,9 @@ class NetlistView(QtWidgets.QGraphicsView):
         # Configure view behavior
         self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         self.setDragMode(QtWidgets.QGraphicsView.DragMode.NoDrag)
-        self.setTransformationAnchor(QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setTransformationAnchor(
+            QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse
+        )
 
     def load_netlist(self, placed: PlacedNetlist) -> None:
         """Load a PlacedNetlist and populate the scene with graphics items."""
@@ -50,7 +58,9 @@ class NetlistView(QtWidgets.QGraphicsView):
             y = placed_inst.location.y * self.LAYOUT_SCALE
             params_str = " ".join(inst.parameters.unkeyed)
 
-            item = self._create_item_for_primitive(inst.primitive, x, y, inst.name, params_str)
+            item = self._create_item_for_primitive(
+                inst.primitive, x, y, inst.name, params_str
+            )
             self._scene.addItem(item)
             instance_items[idx] = item
 
@@ -69,7 +79,9 @@ class NetlistView(QtWidgets.QGraphicsView):
         for edge in placed.edges:
             start_key, end_key, net = edge.start, edge.end, edge.net
             logging.debug(f"Finding pins for edge {edge}")
-            logging.debug(f"Edge is between {placed.get_node(start_key).get_name()} to {placed.get_node(end_key).get_name()}")
+            logging.debug(
+                f"Edge is between {placed.get_node(start_key).get_name()} to {placed.get_node(end_key).get_name()}"
+            )
 
             start_item: SymbolItem | NetNodeItem
             end_item: SymbolItem | NetNodeItem
@@ -95,7 +107,9 @@ class NetlistView(QtWidgets.QGraphicsView):
             end_item.connected_wires.append(wire)
 
         # Fit the view to show all items
-        self.fitInView(self._scene.itemsBoundingRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio)
+        self.fitInView(
+            self._scene.itemsBoundingRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
+        )
 
     def _auto_orient_instances(
         self,
@@ -142,7 +156,9 @@ class NetlistView(QtWidgets.QGraphicsView):
 
             # Compute best orientation for 2-pin devices
             if len(inst.nets) == 2:
-                orient = self._compute_best_orient(item_pos, pin_neighbors.get("1", []), pin_neighbors.get("2", []))
+                orient = self._compute_best_orient(
+                    item_pos, pin_neighbors.get("1", []), pin_neighbors.get("2", [])
+                )
                 item.set_orient(orient)
 
     def _compute_best_orient(
@@ -187,10 +203,17 @@ class NetlistView(QtWidgets.QGraphicsView):
             # Pin names are "1", "2", etc. (1-indexed)
             return str(pin_index + 1)
         except ValueError:
-            logging.warning("Unable to find net %s for instance %s in list %s", net, instance_nets.get_name(), ','.join(instance_nets.instance.nets))
+            logging.warning(
+                "Unable to find net %s for instance %s in list %s",
+                net,
+                instance_nets.get_name(),
+                ",".join(instance_nets.instance.nets),
+            )
             return None
 
-    def _create_item_for_primitive(self, primitive: Primitive, x: float, y: float, name: str, params: str):
+    def _create_item_for_primitive(
+        self, primitive: Primitive, x: float, y: float, name: str, params: str
+    ):
         """Create the appropriate graphics item for a given primitive type."""
         if primitive not in PRIMITIVE_SYMBOLS:
             logging.warning("Unable to locate %s, falling back to resistor", primitive)
@@ -206,8 +229,12 @@ class NetlistView(QtWidgets.QGraphicsView):
                 self.setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
                 # Create a fake press event to start the drag
                 fake_event = QtGui.QMouseEvent(
-                    event.type(), event.position(), event.globalPosition(),
-                    QtCore.Qt.MouseButton.LeftButton, event.buttons(), event.modifiers()
+                    event.type(),
+                    event.position(),
+                    event.globalPosition(),
+                    QtCore.Qt.MouseButton.LeftButton,
+                    event.buttons(),
+                    event.modifiers(),
                 )
                 super().mousePressEvent(fake_event)
                 return
@@ -252,7 +279,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def load_netlist(self, placed: PlacedNetlist):
         """Load a PlacedNetlist into the view."""
         self.view.load_netlist(placed)
-    
+
+
 def main(netlist: PlacedNetlist):
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
