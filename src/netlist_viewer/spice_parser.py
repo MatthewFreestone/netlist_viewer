@@ -47,7 +47,7 @@ class NetlistBuilder():
         pass
 
     def handle_line(self, line: str):
-        if (SyntaxHelpers.is_comment(line)):
+        if SyntaxHelpers.is_comment(line):
             return
         inst = Instance.from_line(line)
         self.scope.append(inst)
@@ -57,7 +57,7 @@ class SyntaxHelpers:
         stripped = line.strip()
         if len(stripped) == 0:
             return True
-        if stripped[0] == '#':
+        if stripped[0] == '#' or stripped[0] == '*':
             return True
         return False
 
