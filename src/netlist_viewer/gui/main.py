@@ -89,7 +89,7 @@ class NetlistView(QtWidgets.QGraphicsView):
 
     def mousePressEvent(self, event):
         """Enable panning when clicking on empty space."""
-        if event.button() == QtCore.Qt.MouseButton.LeftButton:
+        if event.button() == QtCore.Qt.MouseButton.RightButton:
             item = self.itemAt(event.pos())
             if item is None:
                 # Clicked on empty space - enable panning
@@ -97,7 +97,7 @@ class NetlistView(QtWidgets.QGraphicsView):
                 # Create a fake press event to start the drag
                 fake_event = QtGui.QMouseEvent(
                     event.type(), event.position(), event.globalPosition(),
-                    event.button(), event.buttons(), event.modifiers()
+                    QtCore.Qt.MouseButton.LeftButton, event.buttons(), event.modifiers()
                 )
                 super().mousePressEvent(fake_event)
                 return
@@ -106,7 +106,7 @@ class NetlistView(QtWidgets.QGraphicsView):
     def mouseReleaseEvent(self, event):
         """Reset drag mode after panning."""
         super().mouseReleaseEvent(event)
-        if event.button() == QtCore.Qt.MouseButton.LeftButton:
+        if event.button() == QtCore.Qt.MouseButton.RightButton:
             self.setDragMode(QtWidgets.QGraphicsView.DragMode.NoDrag)
 
     def wheelEvent(self, event):
@@ -132,8 +132,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """Load a PlacedNetlist into the view."""
         self.view.load_netlist(placed)
     
-def main():
+def main(netlist: PlacedNetlist):
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
+    window.load_netlist(netlist)
     window.show()
     sys.exit(app.exec())

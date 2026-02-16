@@ -1,5 +1,7 @@
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass
+import logging
+import time
 import networkx as nx
 
 from src.netlist_viewer.spice_parser import Instance, Netlist
@@ -67,7 +69,15 @@ class PlacedNetlist:
 
 def add_spring_locations(netlist: Netlist) -> PlacedNetlist:
     graph_rep = to_nx_graph(netlist)
-    pos = nx.spring_layout(graph_rep, method="energy", seed=0)
+    start_time = time.time()
+    if nx.is_planar(graph_rep):
+        logging.info("Graph was planar")
+        pos = nx.planar_layout(graph_rep)
+    else:
+        logging.info("Graph was not planar")
+        pos = nx.spring_layout(graph_rep, method="energy", seed=0)
+    end_time = time.time()
+    logging.info("Calculated layout in %f s", end_time-start_time)
     placed_insts: list[PlacedInstance] = []
     net_nodes: dict[str, PlacedNet] = {}
     for node_id, loc in pos.items():

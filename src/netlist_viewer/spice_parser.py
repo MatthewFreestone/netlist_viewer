@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import enum
+import logging
+import time
 
 
 class SpiceFormatError(BaseException):
@@ -13,13 +15,20 @@ class SpiceFormatError(BaseException):
         self.add_note(f"{reason} @ {line}")
 
 class SpiceParser():
-    def parse(self, netlist: list[str]) -> Netlist:
+    def parse(self, syntax: str | list[str]) -> Netlist:
+        start_time = time.time()
         builder = NetlistBuilder()  
-        for line in netlist:
+        if isinstance(syntax, str):
+            syntax = syntax.splitlines()
+
+        assert isinstance(syntax, list)
+        for line in syntax:
             builder.handle_line(line)
         result = Netlist()
         result.instances = builder.scope
         result.global_nets = builder.global_nets
+        end_time = time.time()
+        logging.info("Parsed netlist in %f s", end_time-start_time)
         return result
     
 class Netlist:
