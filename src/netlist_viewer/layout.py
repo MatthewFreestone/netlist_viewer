@@ -15,32 +15,34 @@ NET_INDICATOR = "$NET$"
 
 
 @dataclass
+class NGTopologyEdge:
+    start: NodeReference
+    end: NodeReference
+    weight: Number
+    net: str
+
+
+@dataclass
+class NGWeightHintEdge:
+    """An edge which only exists to assist spring layout"""
+
+    start: int
+    end: int
+    weight: Number
+
+
+@dataclass
 class NetlistGraph:
     """An representation of a netlist graph; allows identical edges on different nets"""
 
-    @dataclass
-    class TopologyEdge:
-        start: NodeReference
-        end: NodeReference
-        weight: Number
-        net: str
-
-    @dataclass
-    class WeightHintEdge:
-        """An edge which only exists to assist spring layout"""
-
-        start: NodeReference
-        end: NodeReference
-        weight: float
-
     nodes: list[NodeReference]
-    edges: list[TopologyEdge]
-    spring_hint_edges: list[WeightHintEdge]
+    edges: list[NGTopologyEdge]
+    spring_hint_edges: list[NGWeightHintEdge]
 
     def from_netlist(netlist: Netlist) -> NetlistGraph:
         final_nodes: list[NodeReference] = [i for i in range(len(netlist.instances))]
-        final_edges: list[NetlistGraph.TopologyEdge] = []
-        final_hint_edges: list[NetlistGraph.WeightHintEdge] = []
+        final_edges: list[NGTopologyEdge] = []
+        final_hint_edges: list[NGWeightHintEdge] = []
 
         adj_list: defaultdict[str, list[int]] = defaultdict(list)
         for index, inst in enumerate(netlist.instances):
@@ -54,21 +56,22 @@ class NetlistGraph:
             elif len(nodes) == 2:
                 start, end = nodes
                 logging.debug("Add edge (%d,%d) on net '%s'", start, end, net)
-                e = NetlistGraph.TopologyEdge(start, end, weight=2, net=net)
+                e = NGTopologyEdge(start, end, weight=2, net=net)
                 final_edges.append(e)
             else:
                 net_name = NET_INDICATOR + str(net)
                 final_nodes.append(net_name)
                 for n in nodes:
-                    e = NetlistGraph.TopologyEdge(net_name, n, weight=1, net=net)
+                    e = NGTopologyEdge(net_name, n, weight=1, net=net)
                     final_edges.append(e)
                     for o_n in nodes:
                         if n != o_n:
                             # a hint to the spring layout to keep
                             # nodes on the same net closer
-                            e = NetlistGraph.WeightHintEdge(net_name, n, weight=0.5)
+                            e = NGWeightHintEdge(n, o_n, weight=0.5)
                             final_hint_edges.append(e)
-        return NetlistGraph(final_nodes, final_edges, final_hint_edges)
+        g = NetlistGraph(final_nodes, final_edges, final_hint_edges)
+        return g
 
     def to_nx_graph(self, include_hints=False) -> nx.Graph:
         g = nx.Graph()

@@ -11,6 +11,7 @@ from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF
 
 from netlist_viewer.gui.symbols import SymbolDef, Pin
+from netlist_viewer.core_types import Number
 
 
 class WireItem(QGraphicsLineItem):
@@ -120,7 +121,7 @@ class SymbolItem(QGraphicsItem):
         self.value_label = QGraphicsTextItem(self.params, self)
         self.value_label.setPos(-15, 15)
 
-    def _rotate_point(self, x: float, y: float) -> tuple[float, float]:
+    def _rotate_point(self, x: Number, y: Number) -> tuple[Number, Number]:
         """Rotate a point by self.orient degrees around origin."""
         match self.orient:
             case 0:
