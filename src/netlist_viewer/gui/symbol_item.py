@@ -211,6 +211,22 @@ class SymbolItem(QGraphicsItem):
                 painter.setBrush(color)
                 painter.drawEllipse(QPointF(px, py), 2, 2)
 
+            case "text":
+                px, py = self._rotate_point(*shape["pos"])
+                text = shape["text"]
+                anchor = shape.get("anchor", "left")
+                font = painter.font()
+                font.setPointSize(8)
+                painter.setFont(font)
+                metrics = painter.fontMetrics()
+                text_width = metrics.horizontalAdvance(text)
+                text_height = metrics.height()
+                if anchor == "right":
+                    px -= text_width
+                elif anchor == "center":
+                    px -= text_width / 2
+                painter.drawText(QPointF(px, py + text_height / 4), text)
+
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             for wire in self.connected_wires:

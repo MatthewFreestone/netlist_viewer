@@ -1,7 +1,11 @@
 from typing import LiteralString
 import pytest
 from netlist_viewer.layout import NetlistGraph
-from netlist_viewer.spice_parser import Primitive, SpiceParser, SpiceFormatError
+from netlist_viewer.spice_parser import (
+    Primitive,
+    SpiceParser,
+    SpiceFormatError,
+)
 
 
 def test_parse_resistor():
@@ -133,3 +137,149 @@ def test_mixed_circuit_with_new_primitives():
     assert primitives.count(Primitive.DIODE) == 1
     assert primitives.count(Primitive.BJT) == 1
     assert primitives.count(Primitive.VSOURCE) == 1
+
+
+def test_parse_subckt_definition():
+    netlist = """
+    .SUBCKT inv in out vdd vss
+    M1 out in vdd vdd PMOS W=2u L=1u
+    M2 out in vss vss NMOS W=1u L=1u
+    .ENDS
+    """.splitlines()
+
+    parser = SpiceParser()
+    result = parser.parse(netlist)
+
+    assert "inv" in result.subckts
+    subckt = result.subckts["inv"]
+    assert subckt.name == "inv"
+    assert subckt.ports == ["in", "out", "vdd", "vss"]
+    assert len(subckt.instances) == 2
+    assert subckt.instances[0].primitive == Primitive.MOSFET
+    assert subckt.instances[1].primitive == Primitive.MOSFET
+
+
+def test_parse_subckt_with_params():
+    netlist = """
+    .SUBCKT res2 a b W=1u L=10u
+    R1 a mid 1k
+    R2 mid b 1k
+    .ENDS
+    """.splitlines()
+
+    parser = SpiceParser()
+    result = parser.parse(netlist)
+
+    subckt = result.subckts["res2"]
+    assert subckt.ports == ["a", "b"]
+    assert ("W", "1u") in subckt.parameters.keyed
+    assert ("L", "10u") in subckt.parameters.keyed
+
+
+def test_parse_subckt_instance():
+    netlist = """
+    .SUBCKT inv in out vdd vss
+    M1 out in vdd vdd PMOS
+    M2 out in vss vss NMOS
+    .ENDS
+
+    X1 input output VCC GND inv
+    X2 output buffered VCC GND inv
+    """.splitlines()
+
+    parser = SpiceParser()
+    result = parser.parse(netlist)
+
+    assert len(result.instances) == 2
+    assert result.instances[0].primitive == Primitive.SUBCKT
+    assert result.instances[0].name == "X1"
+    assert result.instances[0].subckt_name == "inv"
+    assert result.instances[0].nets == ["input", "output", "VCC", "GND"]
+
+    assert result.instances[1].name == "X2"
+    assert result.instances[1].nets == ["output", "buffered", "VCC", "GND"]
+
+
+def test_parse_subckt_instance_with_params():
+    netlist = """
+    .SUBCKT amp in out vdd W=1u
+    M1 out in vdd vdd PMOS W=W
+    .ENDS
+
+    X1 sig out VCC amp W=2u gain=10
+    """.splitlines()
+
+    parser = SpiceParser()
+    result = parser.parse(netlist)
+
+    inst = result.instances[0]
+    assert inst.subckt_name == "amp"
+    assert ("W", "2u") in inst.parameters.keyed
+    assert ("gain", "10") in inst.parameters.keyed
+
+
+def test_subckt_wrong_net_count():
+    netlist = """
+    .SUBCKT buf in out
+    R1 in out 1k
+    .ENDS
+
+    X1 a b c buf
+    """.splitlines()
+
+    parser = SpiceParser()
+    with pytest.raises(SpiceFormatError) as exc_info:
+        parser.parse(netlist)
+    assert "expects 2 nets, got 3" in exc_info.value.reason
+
+
+def test_subckt_undefined():
+    netlist = """
+    X1 a b c undefined_subckt
+    """.splitlines()
+
+    parser = SpiceParser()
+    with pytest.raises(SpiceFormatError) as exc_info:
+        parser.parse(netlist)
+    assert "Unknown subcircuit" in exc_info.value.reason
+
+
+def test_unclosed_subckt():
+    netlist = """
+    .SUBCKT test a b
+    R1 a b 1k
+    """.splitlines()
+
+    parser = SpiceParser()
+    with pytest.raises(SpiceFormatError) as exc_info:
+        parser.parse(netlist)
+    assert "Unclosed .SUBCKT" in exc_info.value.reason
+
+
+def test_ends_without_subckt():
+    netlist = """
+    R1 a b 1k
+    .ENDS
+    """.splitlines()
+
+    parser = SpiceParser()
+    with pytest.raises(SpiceFormatError) as exc_info:
+        parser.parse(netlist)
+    assert ".ENDS without matching .SUBCKT" in exc_info.value.reason
+
+
+def test_subckt_case_insensitive():
+    netlist = """
+    .subckt myinv in out
+    R1 in out 1k
+    .ends
+
+    X1 a b myinv
+    """.splitlines()
+
+    parser = SpiceParser()
+    result = parser.parse(netlist)
+
+    assert "myinv" in result.subckts
+    assert len(result.instances) == 1
+    assert result.instances[0].subckt_name == "myinv"

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Sequence
+from beartype.typing import Sequence
 from dataclasses import dataclass
 import enum
 import logging
@@ -17,6 +17,14 @@ class SpiceFormatError(BaseException):
         self.add_note(f"{reason} @ {line}")
 
 
+@dataclass
+class SubcktDef:
+    name: str
+    ports: list[str]
+    instances: list[Instance]
+    parameters: Parameters
+
+
 class SpiceParser:
     def parse(self, syntax: str | Sequence[str]) -> Netlist:
         start_time = time.time()
@@ -27,40 +35,160 @@ class SpiceParser:
         assert isinstance(syntax, list)
         for line in syntax:
             builder.handle_line(line)
-        result = Netlist()
-        result.instances = builder.scope
-        result.global_nets = builder.global_nets
+
+        if builder.build_stack:
+            raise SpiceFormatError("", "Unclosed .SUBCKT definition")
+
+        result = Netlist(builder.scope, builder.subckts, builder.global_nets)
         end_time = time.time()
         logging.info("Parsed netlist in %f s", end_time - start_time)
         return result
 
 
+@dataclass
 class Netlist:
     instances: list[Instance]
-    subckts: dict[str, list[Instance]]
+    subckts: dict[str, SubcktDef]
     global_nets: list[str]
 
 
 class NetlistBuilder:
-    build_stack: list
+    @dataclass
+    class InProgressSubckt:
+        name: str
+        ports: list[str]
+        parameters: Parameters
+        parent_scope: list[Instance]
+
+    build_stack: list[InProgressSubckt]
     scope: list[Instance]
+    subckts: dict[str, SubcktDef]
     global_nets: list[str]
 
     def __init__(self):
         self.scope = []
         self.build_stack = []
+        self.subckts = {}
         self.global_nets = ["0"]
-        pass
 
     def handle_line(self, line: str):
-        if SyntaxHelpers.is_comment(line):
+        if SyntaxHelpers.is_comment_or_whitespace(line):
             return
-        inst = Instance.from_line(line)
+
+        stripped = line.strip()
+        upper = stripped.upper()
+
+        if upper.startswith(".SUBCKT"):
+            self._handle_subckt_start(stripped)
+            return
+
+        if upper.startswith(".ENDS"):
+            self._handle_subckt_end(stripped)
+            return
+
+        # Handle X (subcircuit instance) lines
+        if upper.startswith("X"):
+            inst = self._parse_subckt_instance(stripped)
+        else:
+            inst = Instance.from_line(line)
+
         self.scope.append(inst)
+
+    def _handle_subckt_start(self, line: str):
+        # .SUBCKT name port1 port2 ... [param=value ...]
+        tokens = line.split()
+        if len(tokens) < 2:
+            raise SpiceFormatError(line, ".SUBCKT requires a name")
+
+        name = tokens[1]
+        ports: list[str] = []
+        parameters = Parameters()
+
+        for token in tokens[2:]:
+            if "=" in token:
+                parameters.add(token)
+            else:
+                ports.append(token)
+
+        # Push current scope onto stack and start new scope
+        new_frame = NetlistBuilder.InProgressSubckt(name, ports, parameters, self.scope)
+        self.build_stack.append(new_frame)
+        self.scope = []
+
+    def _handle_subckt_end(self, line: str):
+        if len(self.build_stack) == 0:
+            raise SpiceFormatError(line, ".ENDS without matching .SUBCKT")
+
+        finished_frame = self.build_stack.pop()
+
+        # Create subckt definition
+        subckt = SubcktDef(
+            name=finished_frame.name,
+            ports=finished_frame.ports,
+            instances=self.scope,
+            parameters=finished_frame.parameters,
+        )
+        self.subckts[finished_frame.name] = subckt
+
+        # Restore parent scope
+        self.scope = finished_frame.parent_scope
+
+    def _parse_subckt_instance(self, line: str) -> Instance:
+        # Xname net1 net2 ... subckt_name [param=value ...]
+        # our normal way doesn't work to due variable terminal count
+        tokens = line.split()
+        if len(tokens) < 2:
+            raise SpiceFormatError(line, "X instance requires nets and subckt name")
+
+        inst_name = tokens[0]
+
+        # Find the subckt name by scanning tokens for a known subckt
+        subckt_name = None
+        subckt_idx = -1
+
+        for i, token in enumerate(tokens[1:], start=1):
+            if "=" in token:
+                # This is a parameter, subckt name must be before this
+                break
+            if token in self.subckts:
+                subckt_name = token
+                subckt_idx = i
+                break
+
+        if subckt_name is None:
+            # Grab the last token to use in the name as the error
+            non_param_tokens = [t for t in tokens[1:] if "=" not in t]
+            if non_param_tokens:
+                attempted_name = non_param_tokens[-1]
+                raise SpiceFormatError(line, f"Unknown subcircuit '{attempted_name}'")
+            raise SpiceFormatError(line, "No subcircuit name found")
+
+        subckt_def = self.subckts[subckt_name]
+        expected_nets = len(subckt_def.ports)
+        nets = tokens[1:subckt_idx]
+
+        if len(nets) != expected_nets:
+            raise SpiceFormatError(
+                line,
+                f"Subcircuit '{subckt_name}' expects {expected_nets} nets, got {len(nets)}",
+            )
+
+        # Parse parameters after subckt name
+        parameters = Parameters()
+        for token in tokens[subckt_idx + 1 :]:
+            parameters.add(token)
+
+        return Instance(
+            primitive=Primitive.SUBCKT,
+            nets=nets,
+            parameters=parameters,
+            name=inst_name,
+            subckt_name=subckt_name,
+        )
 
 
 class SyntaxHelpers:
-    def is_comment(line: str) -> bool:
+    def is_comment_or_whitespace(line: str) -> bool:
         stripped = line.strip()
         if len(stripped) == 0:
             return True
@@ -75,13 +203,17 @@ class Instance:
     nets: list[str]
     parameters: Parameters
     name: str
+    subckt_name: str | None = None
 
     def from_line(line: str) -> Instance:
-        tokenized = (
-            line.strip().split()
-        )  # TODO: Handle parenthesized expresions with spaces
+        # TODO: Handle parenthesized expresions with spaces
+        tokenized = line.strip().split()
+
         if len(tokenized) < 2:
-            raise SpiceFormatError(line, "Unable to split into >= 2 tokens")
+            raise SpiceFormatError(
+                line, "Unable to split into instance into name and nets"
+            )
+
         name_token, *rest = tokenized
         prim: Primitive = Primitive.from_name(name_token)
         if prim == Primitive.UNKNOWN:
@@ -128,6 +260,7 @@ class Primitive(enum.Enum):
     JFET = "J"
     VSOURCE = "V"
     ISOURCE = "I"
+    SUBCKT = "X"
     UNKNOWN = "?"
 
     def terminal_count(self) -> int:
@@ -140,6 +273,8 @@ class Primitive(enum.Enum):
                 return 3
             case Primitive.MOSFET:
                 return 4
+            case Primitive.SUBCKT:
+                return -1  # Variable, determined by subckt definition
         return -1
 
     def from_name(name: str) -> Primitive:

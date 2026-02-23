@@ -33,6 +33,123 @@ class SymbolDef:
     shapes: list[dict] = field(default_factory=list)
 
 
+def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:
+    """Dynamically create a SymbolDef for a subcircuit instance.
+
+    Creates a rectangular box with ports distributed on left and right sides.
+    """
+    n_ports = len(port_names)
+    if n_ports == 0:
+        # Edge case: no ports
+        return SymbolDef(
+            name=subckt_name,
+            width=60,
+            height=40,
+            pins=[],
+            shapes=[
+                {
+                    "type": "polygon",
+                    "points": [(-30, -20), (30, -20), (30, 20), (-30, 20)],
+                    "filled": False,
+                },
+            ],
+        )
+
+    # Split ports between left and right sides
+    left_count = (n_ports + 1) // 2
+    right_count = n_ports - left_count
+
+    # Calculate dimensions based on port count
+    port_spacing = 25
+    min_height = 40
+    height = max(min_height, max(left_count, right_count) * port_spacing + 20)
+    width = 80
+    half_w = width // 2
+    half_h = height // 2
+
+    pins: list[Pin] = []
+    shapes: list[dict] = []
+
+    # Box outline
+    shapes.append(
+        {
+            "type": "polygon",
+            "points": [
+                (-half_w, -half_h),
+                (half_w, -half_h),
+                (half_w, half_h),
+                (-half_w, half_h),
+            ],
+            "filled": False,
+        }
+    )
+
+    # Left side ports
+    for i in range(left_count):
+        port_name = port_names[i]
+        # Distribute evenly along left edge
+        if left_count == 1:
+            y = 0
+        else:
+            y = (
+                -half_h + 15 + i * (height - 30) / (left_count - 1)
+                if left_count > 1
+                else 0
+            )
+        x = -half_w - 15
+
+        pins.append(Pin(str(i + 1), x, y, PinSide.LEFT))
+        # Lead line from pin to box edge
+        shapes.append({"type": "line", "p1": (x, y), "p2": (-half_w, y)})
+        shapes.append({"type": "terminal", "pos": (x, y)})
+        # Port label inside box
+        shapes.append(
+            {
+                "type": "text",
+                "pos": (-half_w + 3, y),
+                "text": port_name,
+                "anchor": "left",
+            }
+        )
+
+    # Right side ports
+    for i in range(right_count):
+        port_idx = left_count + i
+        port_name = port_names[port_idx]
+        # Distribute evenly along right edge
+        if right_count == 1:
+            y = 0
+        else:
+            y = (
+                -half_h + 15 + i * (height - 30) / (right_count - 1)
+                if right_count > 1
+                else 0
+            )
+        x = half_w + 15
+
+        pins.append(Pin(str(port_idx + 1), x, y, PinSide.RIGHT))
+        # Lead line from box edge to pin
+        shapes.append({"type": "line", "p1": (half_w, y), "p2": (x, y)})
+        shapes.append({"type": "terminal", "pos": (x, y)})
+        # Port label inside box
+        shapes.append(
+            {
+                "type": "text",
+                "pos": (half_w - 3, y),
+                "text": port_name,
+                "anchor": "right",
+            }
+        )
+
+    return SymbolDef(
+        name=subckt_name,
+        width=width + 30,  # Account for lead lines
+        height=height,
+        pins=pins,
+        shapes=shapes,
+    )
+
+
 # Symbol library
 RESISTOR = SymbolDef(
     name="resistor",

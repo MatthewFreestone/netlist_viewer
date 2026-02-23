@@ -7,18 +7,35 @@ import logging
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    # netlist = """
-    # R1 0 1 1k
-    # V1 1 0 DC 5"""
     netlist = """
-    V1 vcc 0 DC 12
-    R1 vcc collector 1k
-    Q1 collector base emitter 2N2222
-    R2 base vcc 10k
-    R3 emitter 0 100
-    C1 base 0 10u
-    L1 vcc filtered 100u
-    D1 filtered 0 1N4001"""
+    * Inverter subcircuit
+    .SUBCKT inv in out VDD VSS
+    M1 out in VDD VDD PMOS W=2u L=1u
+    M2 out in VSS VSS NMOS W=1u L=1u
+    .ENDS
+
+    * Buffer subcircuit (two inverters)
+    .SUBCKT buf in out VDD VSS
+    X1 in mid VDD VSS inv
+    X2 mid out VDD VSS inv
+    .ENDS
+
+    * 2-port subckt
+    .SUBCKT res1 a b r=10k
+    R1 a b r=r/2
+    R2 a b r=r/2
+    .ENDS
+
+    * Top level circuit
+    V1 vcc 0 DC 5
+    X0 input vcc res1 r=10k
+
+    X1 input n1 vcc 0 inv
+    X2 n1 n2 vcc 0 inv
+    X3 n2 output vcc 0 buf
+
+    C1 output 0 10p
+    """
     parser = SpiceParser()
     components = parser.parse(netlist)
     placed = add_spring_locations(components)

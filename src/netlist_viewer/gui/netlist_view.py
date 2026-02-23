@@ -13,9 +13,10 @@ from netlist_viewer.gui.symbols import (
     JFET,
     VOLTAGE_SOURCE,
     CURRENT_SOURCE,
+    create_subckt_symbol,
 )
 from netlist_viewer.layout import PlacedInstance, PlacedNetlist, NET_INDICATOR
-from netlist_viewer.spice_parser import Primitive
+from netlist_viewer.spice_parser import Primitive, Instance, Netlist
 
 
 # Map primitive types to symbol definitions
@@ -66,7 +67,7 @@ class NetlistView(QtWidgets.QGraphicsView):
             params_str = " ".join(inst.parameters.unkeyed)
 
             item = self._create_item_for_primitive(
-                inst.primitive, x, y, inst.name, params_str
+                inst, x, y, params_str, placed.source
             )
             self._scene.addItem(item)
             instance_items.append(item)
@@ -219,13 +220,28 @@ class NetlistView(QtWidgets.QGraphicsView):
             return None
 
     def _create_item_for_primitive(
-        self, primitive: Primitive, x: float, y: float, name: str, params: str
+        self, inst: Instance, x: float, y: float, params: str, netlist: Netlist
     ):
         """Create the appropriate graphics item for a given primitive type."""
-        if primitive not in PRIMITIVE_SYMBOLS:
+        primitive = inst.primitive
+
+        if primitive == Primitive.SUBCKT:
+            # Look up subcircuit definition to get port names
+            subckt_name = inst.subckt_name
+            if subckt_name and subckt_name in netlist.subckts:
+                subckt_def = netlist.subckts[subckt_name]
+                symbol = create_subckt_symbol(subckt_name, subckt_def.ports)
+            else:
+                # Fallback: create generic box with numbered ports
+                port_names = [str(i + 1) for i in range(len(inst.nets))]
+                symbol = create_subckt_symbol(subckt_name or "?", port_names)
+        elif primitive not in PRIMITIVE_SYMBOLS:
             logging.warning("Unable to locate %s, falling back to resistor", primitive)
-        symbol = PRIMITIVE_SYMBOLS.get(primitive, RESISTOR)
-        return SymbolItem(symbol, name=name, params=params, x=x, y=y)
+            symbol = RESISTOR
+        else:
+            symbol = PRIMITIVE_SYMBOLS[primitive]
+
+        return SymbolItem(symbol, name=inst.name, params=params, x=x, y=y)
 
     def mousePressEvent(self, event):
         """Enable panning when clicking on empty space."""
