@@ -1,26 +1,52 @@
-"""Generic symbol renderer for circuit components."""
+from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QGraphicsItem,
     QGraphicsTextItem,
-    QGraphicsLineItem,
+    QGraphicsPathItem,
     QStyleOptionGraphicsItem,
     QWidget,
 )
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF
+from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF, QPainterPath
 
-from netlist_viewer.gui.symbols import SymbolDef, Pin
+from netlist_viewer.gui.symbols import (
+    SymbolDef,
+    Pin,
+    PinSide,
+    Shape,
+    LineShape,
+    PolylineShape,
+    CircleShape,
+    PolygonShape,
+    ArcShape,
+    TerminalShape,
+    TextShape,
+)
 from netlist_viewer.core_types import Number
 
 
-class WireItem(QGraphicsLineItem):
-    """A wire connecting two graphics items, optionally at specific pins."""
+class ConnectableItem(QGraphicsItem):
+    """Base class for items that can be connected by wires."""
+
+    connected_wires: list[WireItem]
+
+    def pin_scene_pos(self, pin_name: str) -> QPointF:
+        """Get scene position of a pin for wire connections."""
+        raise NotImplementedError
+
+    def get_pin_side(self, pin_name: str) -> PinSide | None:
+        """Get the side a pin exits from. Override in subclasses with pin info."""
+        return None
+
+
+class WireItem(QGraphicsPathItem):
+    """A wire connecting two graphics items with L-shaped orthogonal routing."""
 
     def __init__(
         self,
-        start_item: QGraphicsItem,
-        end_item: QGraphicsItem,
+        start_item: ConnectableItem,
+        end_item: ConnectableItem,
         start_pin: str | None = None,
         end_pin: str | None = None,
     ):
@@ -33,22 +59,66 @@ class WireItem(QGraphicsLineItem):
         self.setPen(QPen(QColor(80, 80, 80), 1.5))
         self.update_position()
 
-    def _get_pos(self, item: QGraphicsItem, pin: str | None) -> QPointF:
+    def _get_pos(self, item: ConnectableItem, pin: str | None) -> QPointF:
         """Get position for connection - use pin if available, else center."""
         if pin is not None:
-            pin_method = getattr(item, "pin_scene_pos", None)
-            if pin_method is not None:
-                return pin_method(pin)
+            return item.pin_scene_pos(pin)
         return item.scenePos()
 
+    def _get_pin_side(self, item: ConnectableItem, pin: str | None) -> PinSide | None:
+        """Get the side a pin exits from, accounting for rotation."""
+        if pin is None:
+            return None
+        return item.get_pin_side(pin)
+
+    def _is_horizontal_exit(self, side: PinSide | None) -> bool:
+        """Check if a pin side exits horizontally."""
+        if side is None:
+            return True  # Default to horizontal for net nodes
+        return side in (PinSide.LEFT, PinSide.RIGHT)
+
     def update_position(self):
-        """Update wire endpoints based on connected items' positions."""
+        """Update wire path based on connected items' positions using L-routing."""
         start_pos = self._get_pos(self.start_item, self.start_pin)
         end_pos = self._get_pos(self.end_item, self.end_pin)
-        self.setLine(start_pos.x(), start_pos.y(), end_pos.x(), end_pos.y())
+
+        start_side = self._get_pin_side(self.start_item, self.start_pin)
+        end_side = self._get_pin_side(self.end_item, self.end_pin)
+
+        # Determine bend direction based on pin sides
+        start_horizontal = self._is_horizontal_exit(start_side)
+        end_horizontal = self._is_horizontal_exit(end_side)
+
+        path = QPainterPath()
+        path.moveTo(start_pos)
+
+        dx = end_pos.x() - start_pos.x()
+        dy = end_pos.y() - start_pos.y()
+
+        # If start and end are nearly aligned, draw straight line
+        if abs(dx) < 5 or abs(dy) < 5:
+            path.lineTo(end_pos)
+        elif start_horizontal and not end_horizontal:
+            # Start goes horizontal, end goes vertical: bend at (end_x, start_y)
+            path.lineTo(end_pos.x(), start_pos.y())
+            path.lineTo(end_pos)
+        elif not start_horizontal and end_horizontal:
+            # Start goes vertical, end goes horizontal: bend at (start_x, end_y)
+            path.lineTo(start_pos.x(), end_pos.y())
+            path.lineTo(end_pos)
+        elif start_horizontal:
+            # Both horizontal: go horizontal first, then vertical
+            path.lineTo(end_pos.x(), start_pos.y())
+            path.lineTo(end_pos)
+        else:
+            # Both vertical: go vertical first, then horizontal
+            path.lineTo(start_pos.x(), end_pos.y())
+            path.lineTo(end_pos)
+
+        self.setPath(path)
 
 
-class NetNodeItem(QGraphicsItem):
+class NetNodeItem(ConnectableItem):
     """A small dot representing a net junction point."""
 
     def __init__(self, x: float = 0, y: float = 0, name: str = ""):
@@ -86,7 +156,7 @@ class NetNodeItem(QGraphicsItem):
         return self.scenePos()
 
 
-class SymbolItem(QGraphicsItem):
+class SymbolItem(ConnectableItem):
     """Generic renderer for any SymbolDef."""
 
     def __init__(
@@ -102,7 +172,7 @@ class SymbolItem(QGraphicsItem):
         self.symbol = symbol
         self.name = name
         self.params = params
-        self.orient = orient  # 0, 90, 180, 270 degrees
+        self.orientation = orient  # 0, 90, 180, 270 degrees
         self.connected_wires: list[WireItem] = []
 
         self.setPos(x, y)
@@ -123,7 +193,7 @@ class SymbolItem(QGraphicsItem):
 
     def _rotate_point(self, x: Number, y: Number) -> tuple[Number, Number]:
         """Rotate a point by self.orient degrees around origin."""
-        match self.orient:
+        match self.orientation:
             case 0:
                 return (x, y)
             case 90:
@@ -142,6 +212,23 @@ class SymbolItem(QGraphicsItem):
                 return pin
         return None
 
+    def get_pin_side(self, pin_name: str) -> PinSide | None:
+        """Get the rotated side of a pin (accounting for component orientation)."""
+        pin = self.get_pin(pin_name)
+        if pin is None:
+            return None
+
+        # Rotate the pin side based on component orientation
+        side = pin.side
+        rotations = self.orientation // 90
+        sides_cw = [PinSide.TOP, PinSide.RIGHT, PinSide.BOTTOM, PinSide.LEFT]
+        try:
+            idx = sides_cw.index(side)
+            rotated_idx = (idx + rotations) % 4
+            return sides_cw[rotated_idx]
+        except ValueError:
+            return side
+
     def pin_local_pos(self, pin_name: str) -> QPointF:
         """Get local position of a pin (relative to item origin)."""
         pin = self.get_pin(pin_name)
@@ -156,7 +243,7 @@ class SymbolItem(QGraphicsItem):
 
     def boundingRect(self) -> QRectF:
         w, h = self.symbol.width, self.symbol.height
-        if self.orient in (90, 270):
+        if self.orientation in (90, 270):
             w, h = h, w
         margin = 5
         return QRectF(-w / 2 - margin, -h / 2 - margin, w + 2 * margin, h + 2 * margin)
@@ -175,46 +262,42 @@ class SymbolItem(QGraphicsItem):
         for shape in self.symbol.shapes:
             self._draw_shape(painter, shape, color)
 
-    def _draw_shape(self, painter: QPainter, shape: dict, color: QColor) -> None:
-        match shape["type"]:
-            case "line":
-                p1 = self._rotate_point(*shape["p1"])
-                p2 = self._rotate_point(*shape["p2"])
-                painter.drawLine(QPointF(*p1), QPointF(*p2))
+    def _draw_shape(self, painter: QPainter, shape: Shape, color: QColor) -> None:
+        match shape:
+            case LineShape(p1, p2):
+                rp1 = self._rotate_point(*p1)
+                rp2 = self._rotate_point(*p2)
+                painter.drawLine(QPointF(*rp1), QPointF(*rp2))
 
-            case "polyline":
-                points = [QPointF(*self._rotate_point(*p)) for p in shape["points"]]
-                painter.drawPolyline(QPolygonF(points))
+            case PolylineShape(points):
+                qpoints = [QPointF(*self._rotate_point(*p)) for p in points]
+                painter.drawPolyline(QPolygonF(qpoints))
 
-            case "circle":
-                cx, cy = self._rotate_point(*shape["center"])
-                painter.drawEllipse(QPointF(cx, cy), shape["r"], shape["r"])
+            case CircleShape(center, r):
+                cx, cy = self._rotate_point(*center)
+                painter.drawEllipse(QPointF(cx, cy), r, r)
 
-            case "polygon":
-                points = [QPointF(*self._rotate_point(*p)) for p in shape["points"]]
-                if shape.get("filled", False):
+            case PolygonShape(points, filled):
+                qpoints = [QPointF(*self._rotate_point(*p)) for p in points]
+                if filled:
                     painter.setBrush(color)
-                painter.drawPolygon(QPolygonF(points))
+                painter.drawPolygon(QPolygonF(qpoints))
                 painter.setBrush(QColor(0, 0, 0, 0))  # reset
 
-            case "arc":
-                cx, cy = self._rotate_point(*shape["center"])
-                r = shape["r"]
-                start = shape["start"] + self.orient
-                span = shape["span"]
+            case ArcShape(center, r, start, span):
+                cx, cy = self._rotate_point(*center)
+                rotated_start = start + self.orientation
                 # Qt uses 1/16th degree units
                 rect = QRectF(cx - r, cy - r, r * 2, r * 2)
-                painter.drawArc(rect, int(start * 16), int(span * 16))
+                painter.drawArc(rect, int(rotated_start * 16), int(span * 16))
 
-            case "terminal":
-                px, py = self._rotate_point(*shape["pos"])
+            case TerminalShape(pos):
+                px, py = self._rotate_point(*pos)
                 painter.setBrush(color)
                 painter.drawEllipse(QPointF(px, py), 2, 2)
 
-            case "text":
-                px, py = self._rotate_point(*shape["pos"])
-                text = shape["text"]
-                anchor = shape.get("anchor", "left")
+            case TextShape(pos, text, anchor):
+                px, py = self._rotate_point(*pos)
                 font = painter.font()
                 font.setPointSize(8)
                 painter.setFont(font)
@@ -235,7 +318,7 @@ class SymbolItem(QGraphicsItem):
 
     def set_orient(self, orient: int) -> None:
         """Set orientation and update display."""
-        self.orient = orient % 360
+        self.orientation = orient % 360
         self.prepareGeometryChange()
         self.update()
         for wire in self.connected_wires:
@@ -243,4 +326,4 @@ class SymbolItem(QGraphicsItem):
 
     def rotate_by(self, degrees: int) -> None:
         """Rotate by given degrees (snapped to 90)."""
-        self.set_orient(self.orient + degrees)
+        self.set_orient(self.orientation + degrees)

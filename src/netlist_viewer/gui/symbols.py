@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Literal
 from netlist_viewer.core_types import Number
 
 
@@ -10,6 +11,65 @@ class PinSide(Enum):
     RIGHT = "right"
     TOP = "top"
     BOTTOM = "bottom"
+
+
+# Type alias for coordinate pairs
+Point = tuple[Number, Number]
+
+
+# Shape dataclasses
+@dataclass(frozen=True)
+class LineShape:
+    p1: Point
+    p2: Point
+
+
+@dataclass(frozen=True)
+class PolylineShape:
+    points: tuple[Point, ...]
+
+
+@dataclass(frozen=True)
+class CircleShape:
+    center: Point
+    r: Number
+
+
+@dataclass(frozen=True)
+class PolygonShape:
+    points: tuple[Point, ...]
+    filled: bool = False
+
+
+@dataclass(frozen=True)
+class ArcShape:
+    center: Point
+    r: Number
+    start: Number
+    span: Number
+
+
+@dataclass(frozen=True)
+class TerminalShape:
+    pos: Point
+
+
+@dataclass(frozen=True)
+class TextShape:
+    pos: Point
+    text: str
+    anchor: Literal["left", "right", "center"] = "left"
+
+
+Shape = (
+    LineShape
+    | PolylineShape
+    | CircleShape
+    | PolygonShape
+    | ArcShape
+    | TerminalShape
+    | TextShape
+)
 
 
 @dataclass
@@ -30,7 +90,7 @@ class SymbolDef:
     width: Number
     height: Number
     pins: list[Pin]
-    shapes: list[dict] = field(default_factory=list)
+    shapes: list[Shape] = field(default_factory=list)
 
 
 def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:
@@ -47,11 +107,10 @@ def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:
             height=40,
             pins=[],
             shapes=[
-                {
-                    "type": "polygon",
-                    "points": [(-30, -20), (30, -20), (30, 20), (-30, 20)],
-                    "filled": False,
-                },
+                PolygonShape(
+                    points=((-30, -20), (30, -20), (30, 20), (-30, 20)),
+                    filled=False,
+                ),
             ],
         )
 
@@ -68,20 +127,19 @@ def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:
     half_h = height // 2
 
     pins: list[Pin] = []
-    shapes: list[dict] = []
+    shapes: list[Shape] = []
 
     # Box outline
     shapes.append(
-        {
-            "type": "polygon",
-            "points": [
+        PolygonShape(
+            points=(
                 (-half_w, -half_h),
                 (half_w, -half_h),
                 (half_w, half_h),
                 (-half_w, half_h),
-            ],
-            "filled": False,
-        }
+            ),
+            filled=False,
+        )
     )
 
     # Left side ports
@@ -99,18 +157,9 @@ def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:
         x = -half_w - 15
 
         pins.append(Pin(str(i + 1), x, y, PinSide.LEFT))
-        # Lead line from pin to box edge
-        shapes.append({"type": "line", "p1": (x, y), "p2": (-half_w, y)})
-        shapes.append({"type": "terminal", "pos": (x, y)})
-        # Port label inside box
-        shapes.append(
-            {
-                "type": "text",
-                "pos": (-half_w + 3, y),
-                "text": port_name,
-                "anchor": "left",
-            }
-        )
+        shapes.append(LineShape(p1=(x, y), p2=(-half_w, y)))
+        shapes.append(TerminalShape(pos=(x, y)))
+        shapes.append(TextShape(pos=(-half_w + 3, y), text=port_name, anchor="left"))
 
     # Right side ports
     for i in range(right_count):
@@ -128,18 +177,9 @@ def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:
         x = half_w + 15
 
         pins.append(Pin(str(port_idx + 1), x, y, PinSide.RIGHT))
-        # Lead line from box edge to pin
-        shapes.append({"type": "line", "p1": (half_w, y), "p2": (x, y)})
-        shapes.append({"type": "terminal", "pos": (x, y)})
-        # Port label inside box
-        shapes.append(
-            {
-                "type": "text",
-                "pos": (half_w - 3, y),
-                "text": port_name,
-                "anchor": "right",
-            }
-        )
+        shapes.append(LineShape(p1=(half_w, y), p2=(x, y)))
+        shapes.append(TerminalShape(pos=(x, y)))
+        shapes.append(TextShape(pos=(half_w - 3, y), text=port_name, anchor="right"))
 
     return SymbolDef(
         name=subckt_name,
@@ -160,9 +200,8 @@ RESISTOR = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),
     ],
     shapes=[
-        {
-            "type": "polyline",
-            "points": [
+        PolylineShape(
+            points=(
                 (-25, 0),
                 (-20, -8),
                 (-12, 8),
@@ -171,10 +210,10 @@ RESISTOR = SymbolDef(
                 (12, -8),
                 (20, 8),
                 (25, 0),
-            ],
-        },
-        {"type": "terminal", "pos": (-25, 0)},
-        {"type": "terminal", "pos": (25, 0)},
+            )
+        ),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
     ],
 )
 
@@ -187,12 +226,12 @@ CAPACITOR = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),
     ],
     shapes=[
-        {"type": "line", "p1": (-25, 0), "p2": (-5, 0)},
-        {"type": "line", "p1": (-5, -10), "p2": (-5, 10)},
-        {"type": "line", "p1": (5, -10), "p2": (5, 10)},
-        {"type": "line", "p1": (5, 0), "p2": (25, 0)},
-        {"type": "terminal", "pos": (-25, 0)},
-        {"type": "terminal", "pos": (25, 0)},
+        LineShape(p1=(-25, 0), p2=(-5, 0)),
+        LineShape(p1=(-5, -10), p2=(-5, 10)),
+        LineShape(p1=(5, -10), p2=(5, 10)),
+        LineShape(p1=(5, 0), p2=(25, 0)),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
     ],
 )
 
@@ -205,16 +244,16 @@ VOLTAGE_SOURCE = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),  # negative
     ],
     shapes=[
-        {"type": "circle", "center": (0, 0), "r": 15},
-        {"type": "line", "p1": (-25, 0), "p2": (-15, 0)},  # left lead
-        {"type": "line", "p1": (15, 0), "p2": (25, 0)},  # right lead
+        CircleShape(center=(0, 0), r=15),
+        LineShape(p1=(-25, 0), p2=(-15, 0)),  # left lead
+        LineShape(p1=(15, 0), p2=(25, 0)),  # right lead
         # Plus sign
-        {"type": "line", "p1": (-10, 0), "p2": (-4, 0)},
-        {"type": "line", "p1": (-7, -3), "p2": (-7, 3)},
+        LineShape(p1=(-10, 0), p2=(-4, 0)),
+        LineShape(p1=(-7, -3), p2=(-7, 3)),
         # Minus sign
-        {"type": "line", "p1": (4, 0), "p2": (10, 0)},
-        {"type": "terminal", "pos": (-25, 0)},
-        {"type": "terminal", "pos": (25, 0)},
+        LineShape(p1=(4, 0), p2=(10, 0)),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
     ],
 )
 
@@ -227,14 +266,14 @@ CURRENT_SOURCE = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),
     ],
     shapes=[
-        {"type": "circle", "center": (0, 0), "r": 15},
-        {"type": "line", "p1": (-25, 0), "p2": (-15, 0)},  # left lead
-        {"type": "line", "p1": (15, 0), "p2": (25, 0)},  # right lead
+        CircleShape(center=(0, 0), r=15),
+        LineShape(p1=(-25, 0), p2=(-15, 0)),  # left lead
+        LineShape(p1=(15, 0), p2=(25, 0)),  # right lead
         # Arrow inside
-        {"type": "line", "p1": (-8, 0), "p2": (8, 0)},
-        {"type": "polygon", "points": [(8, 0), (3, -4), (3, 4)], "filled": True},
-        {"type": "terminal", "pos": (-25, 0)},
-        {"type": "terminal", "pos": (25, 0)},
+        LineShape(p1=(-8, 0), p2=(8, 0)),
+        PolygonShape(points=((8, 0), (3, -4), (3, 4)), filled=True),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
     ],
 )
 
@@ -246,10 +285,10 @@ GROUND = SymbolDef(
         Pin("1", 0, 0, PinSide.TOP),
     ],
     shapes=[
-        {"type": "line", "p1": (0, 0), "p2": (0, 5)},
-        {"type": "line", "p1": (-10, 5), "p2": (10, 5)},
-        {"type": "line", "p1": (-6, 9), "p2": (6, 9)},
-        {"type": "line", "p1": (-2, 13), "p2": (2, 13)},
+        LineShape(p1=(0, 0), p2=(0, 5)),
+        LineShape(p1=(-10, 5), p2=(10, 5)),
+        LineShape(p1=(-6, 9), p2=(6, 9)),
+        LineShape(p1=(-2, 13), p2=(2, 13)),
     ],
 )
 
@@ -262,15 +301,15 @@ INDUCTOR = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),
     ],
     shapes=[
-        # Coil humps (4 arcs approximated as bumps)
-        {"type": "line", "p1": (-25, 0), "p2": (-20, 0)},
-        {"type": "arc", "center": (-15, 0), "r": 5, "start": 180, "span": 180},
-        {"type": "arc", "center": (-5, 0), "r": 5, "start": 180, "span": 180},
-        {"type": "arc", "center": (5, 0), "r": 5, "start": 180, "span": 180},
-        {"type": "arc", "center": (15, 0), "r": 5, "start": 180, "span": 180},
-        {"type": "line", "p1": (20, 0), "p2": (25, 0)},
-        {"type": "terminal", "pos": (-25, 0)},
-        {"type": "terminal", "pos": (25, 0)},
+        # Coil humps (4 arcs)
+        LineShape(p1=(-25, 0), p2=(-20, 0)),
+        ArcShape(center=(-15, 0), r=5, start=180, span=180),
+        ArcShape(center=(-5, 0), r=5, start=180, span=180),
+        ArcShape(center=(5, 0), r=5, start=180, span=180),
+        ArcShape(center=(15, 0), r=5, start=180, span=180),
+        LineShape(p1=(20, 0), p2=(25, 0)),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
     ],
 )
 
@@ -283,14 +322,14 @@ DIODE = SymbolDef(
         Pin("2", 25, 0, PinSide.RIGHT),  # Cathode
     ],
     shapes=[
-        {"type": "line", "p1": (-25, 0), "p2": (-8, 0)},  # left lead
+        LineShape(p1=(-25, 0), p2=(-8, 0)),  # left lead
         # Triangle (anode side)
-        {"type": "polygon", "points": [(-8, -10), (-8, 10), (8, 0)], "filled": False},
+        PolygonShape(points=((-8, -10), (-8, 10), (8, 0)), filled=False),
         # Bar (cathode side)
-        {"type": "line", "p1": (8, -10), "p2": (8, 10)},
-        {"type": "line", "p1": (8, 0), "p2": (25, 0)},  # right lead
-        {"type": "terminal", "pos": (-25, 0)},
-        {"type": "terminal", "pos": (25, 0)},
+        LineShape(p1=(8, -10), p2=(8, 10)),
+        LineShape(p1=(8, 0), p2=(25, 0)),  # right lead
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
     ],
 )
 
@@ -306,22 +345,22 @@ BJT = SymbolDef(
     ],
     shapes=[
         # Collector lead
-        {"type": "line", "p1": (0, -25), "p2": (0, -10)},
+        LineShape(p1=(0, -25), p2=(0, -10)),
         # Emitter lead
-        {"type": "line", "p1": (0, 25), "p2": (0, 10)},
+        LineShape(p1=(0, 25), p2=(0, 10)),
         # Base lead
-        {"type": "line", "p1": (-20, 0), "p2": (-5, 0)},
+        LineShape(p1=(-20, 0), p2=(-5, 0)),
         # Vertical bar (base region)
-        {"type": "line", "p1": (-5, -12), "p2": (-5, 12)},
+        LineShape(p1=(-5, -12), p2=(-5, 12)),
         # Collector connection
-        {"type": "line", "p1": (-5, -6), "p2": (0, -10)},
+        LineShape(p1=(-5, -6), p2=(0, -10)),
         # Emitter connection with arrow
-        {"type": "line", "p1": (-5, 6), "p2": (0, 10)},
+        LineShape(p1=(-5, 6), p2=(0, 10)),
         # Arrow on emitter (pointing outward for NPN)
-        {"type": "polygon", "points": [(0, 10), (-4, 5), (-1, 4)], "filled": True},
-        {"type": "terminal", "pos": (0, -25)},
-        {"type": "terminal", "pos": (-20, 0)},
-        {"type": "terminal", "pos": (0, 25)},
+        PolygonShape(points=((0, 10), (-4, 5), (-1, 4)), filled=True),
+        TerminalShape(pos=(0, -25)),
+        TerminalShape(pos=(-20, 0)),
+        TerminalShape(pos=(0, 25)),
     ],
 )
 
@@ -338,29 +377,29 @@ MOSFET = SymbolDef(
     ],
     shapes=[
         # Drain lead
-        {"type": "line", "p1": (0, -30), "p2": (0, -10)},
+        LineShape(p1=(0, -30), p2=(0, -10)),
         # Source lead
-        {"type": "line", "p1": (0, 30), "p2": (0, 10)},
+        LineShape(p1=(0, 30), p2=(0, 10)),
         # Gate lead
-        {"type": "line", "p1": (-20, 0), "p2": (-10, 0)},
+        LineShape(p1=(-20, 0), p2=(-10, 0)),
         # Gate vertical line
-        {"type": "line", "p1": (-10, -12), "p2": (-10, 12)},
+        LineShape(p1=(-10, -12), p2=(-10, 12)),
         # Channel (3 horizontal segments)
-        {"type": "line", "p1": (-6, -10), "p2": (-6, -4)},
-        {"type": "line", "p1": (-6, -2), "p2": (-6, 2)},
-        {"type": "line", "p1": (-6, 4), "p2": (-6, 10)},
+        LineShape(p1=(-6, -10), p2=(-6, -4)),
+        LineShape(p1=(-6, -2), p2=(-6, 2)),
+        LineShape(p1=(-6, 4), p2=(-6, 10)),
         # Drain connection
-        {"type": "line", "p1": (-6, -10), "p2": (0, -10)},
+        LineShape(p1=(-6, -10), p2=(0, -10)),
         # Source connection
-        {"type": "line", "p1": (-6, 10), "p2": (0, 10)},
+        LineShape(p1=(-6, 10), p2=(0, 10)),
         # Bulk connection
-        {"type": "line", "p1": (-6, 0), "p2": (10, 0)},
+        LineShape(p1=(-6, 0), p2=(10, 0)),
         # Arrow on bulk (pointing in for NMOS)
-        {"type": "polygon", "points": [(-2, 0), (2, -3), (2, 3)], "filled": True},
-        {"type": "terminal", "pos": (0, -30)},
-        {"type": "terminal", "pos": (-20, 0)},
-        {"type": "terminal", "pos": (0, 30)},
-        {"type": "terminal", "pos": (10, 0)},
+        PolygonShape(points=((-2, 0), (2, -3), (2, 3)), filled=True),
+        TerminalShape(pos=(0, -30)),
+        TerminalShape(pos=(-20, 0)),
+        TerminalShape(pos=(0, 30)),
+        TerminalShape(pos=(10, 0)),
     ],
 )
 
@@ -376,19 +415,19 @@ JFET = SymbolDef(
     ],
     shapes=[
         # Drain lead
-        {"type": "line", "p1": (0, -25), "p2": (0, -10)},
+        LineShape(p1=(0, -25), p2=(0, -10)),
         # Source lead
-        {"type": "line", "p1": (0, 25), "p2": (0, 10)},
+        LineShape(p1=(0, 25), p2=(0, 10)),
         # Channel (vertical bar)
-        {"type": "line", "p1": (0, -10), "p2": (0, 10)},
+        LineShape(p1=(0, -10), p2=(0, 10)),
         # Gate lead
-        {"type": "line", "p1": (-20, 0), "p2": (-5, 0)},
+        LineShape(p1=(-20, 0), p2=(-5, 0)),
         # Gate connection to channel
-        {"type": "line", "p1": (-5, 0), "p2": (0, 0)},
+        LineShape(p1=(-5, 0), p2=(0, 0)),
         # Arrow on gate (pointing in for N-channel)
-        {"type": "polygon", "points": [(0, 0), (-5, -3), (-5, 3)], "filled": True},
-        {"type": "terminal", "pos": (0, -25)},
-        {"type": "terminal", "pos": (-20, 0)},
-        {"type": "terminal", "pos": (0, 25)},
+        PolygonShape(points=((0, 0), (-5, -3), (-5, 3)), filled=True),
+        TerminalShape(pos=(0, -25)),
+        TerminalShape(pos=(-20, 0)),
+        TerminalShape(pos=(0, 25)),
     ],
 )
