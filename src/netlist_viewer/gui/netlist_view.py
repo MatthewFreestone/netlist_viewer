@@ -84,6 +84,9 @@ class NetlistView(QtWidgets.QGraphicsView):
         self._auto_orient_instances(placed, instance_items, net_node_items)
 
         # Draw wires for edges, connecting items at the correct pins
+        # Track wires by net so we can link siblings
+        wires_by_net: dict[str, list[WireItem]] = {}
+
         for edge in placed.edges:
             start_key, end_key, net = edge.start, edge.end, edge.net
             logging.debug(f"Finding pins for edge {edge}")
@@ -107,12 +110,22 @@ class NetlistView(QtWidgets.QGraphicsView):
             else:
                 end_item = net_node_items[end_key]
 
-            wire = WireItem(start_item, end_item, start_pin, end_pin)
+            wire = WireItem(start_item, end_item, start_pin, end_pin, net=net)
             self._scene.addItem(wire)
 
             # Register wire with both connected items
             start_item.connected_wires.append(wire)
             end_item.connected_wires.append(wire)
+
+            # Track for sibling linking
+            if net not in wires_by_net:
+                wires_by_net[net] = []
+            wires_by_net[net].append(wire)
+
+        # Link sibling wires on the same net
+        for net, wires in wires_by_net.items():
+            for wire in wires:
+                wire.sibling_wires = [w for w in wires if w is not wire]
 
         # Fit the view to show all items
         self.fitInView(

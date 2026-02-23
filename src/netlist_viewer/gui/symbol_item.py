@@ -6,9 +6,17 @@ from PySide6.QtWidgets import (
     QGraphicsPathItem,
     QStyleOptionGraphicsItem,
     QWidget,
+    QStyle,
 )
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF, QPainterPath
+from PySide6.QtGui import (
+    QPainter,
+    QPen,
+    QColor,
+    QPolygonF,
+    QPainterPath,
+    QPainterPathStroker,
+)
 
 from netlist_viewer.gui.symbols import (
     SymbolDef,
@@ -43,12 +51,16 @@ class ConnectableItem(QGraphicsItem):
 class WireItem(QGraphicsPathItem):
     """A wire connecting two graphics items with L-shaped orthogonal routing."""
 
+    DEFAULT_COLOR = QColor(80, 80, 80)
+    SELECTED_COLOR = QColor(255, 0, 0)
+
     def __init__(
         self,
         start_item: ConnectableItem,
         end_item: ConnectableItem,
         start_pin: str | None = None,
         end_pin: str | None = None,
+        net: str | None = None,
     ):
         super().__init__()
         assert isinstance(start_pin, str) or isinstance(end_pin, str)
@@ -56,8 +68,46 @@ class WireItem(QGraphicsPathItem):
         self.end_item = end_item
         self.start_pin = start_pin
         self.end_pin = end_pin
-        self.setPen(QPen(QColor(80, 80, 80), 1.5))
+        self.net = net
+        self.sibling_wires: list[WireItem] = []  # Other wires on same net
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setPen(QPen(self.DEFAULT_COLOR, 1.5))
         self.update_position()
+
+    def shape(self) -> QPainterPath:
+        """Return a narrow stroke around the wire for precise hit testing."""
+        stroker = QPainterPathStroker()
+        stroker.setWidth(8)  # Clickable width in pixels
+        return stroker.createStroke(self.path())
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionGraphicsItem,
+        widget: QWidget | None = None,
+    ) -> None:
+        # Highlight if this wire or any sibling on the same net is selected
+        net_selected = self.isSelected() or any(
+            w.isSelected() for w in self.sibling_wires
+        )
+        color = self.SELECTED_COLOR if net_selected else self.DEFAULT_COLOR
+        self.setPen(QPen(color, 1.5))
+        # Clear selection state to suppress Qt's default dotted rectangle
+        option.state &= ~QStyle.StateFlag.State_Selected
+        super().paint(painter, option, widget)
+
+    def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value):
+        if change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
+            # Trigger repaint on all sibling wires so they update their color
+            for wire in self.sibling_wires:
+                wire.update()
+            # Trigger repaint on connected items (for NetNodeItem to update)
+            self.start_item.update()
+            self.end_item.update()
+            for wire in self.sibling_wires:
+                wire.start_item.update()
+                wire.end_item.update()
+        return super().itemChange(change, value)
 
     def _get_pos(self, item: ConnectableItem, pin: str | None) -> QPointF:
         """Get position for connection - use pin if available, else center."""
@@ -126,6 +176,7 @@ class NetNodeItem(ConnectableItem):
         self.name = name
         self.connected_wires: list[WireItem] = []
         self.setPos(x, y)
+        self.setZValue(1)  # Above wires (default z=0)
 
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
@@ -134,6 +185,13 @@ class NetNodeItem(ConnectableItem):
     def boundingRect(self) -> QRectF:
         return QRectF(-5, -5, 10, 10)
 
+    def _is_net_selected(self) -> bool:
+        """Check if any wire connected to this node is selected."""
+        for wire in self.connected_wires:
+            if wire.isSelected() or any(w.isSelected() for w in wire.sibling_wires):
+                return True
+        return False
+
     def paint(
         self,
         painter: QPainter,
@@ -141,8 +199,15 @@ class NetNodeItem(ConnectableItem):
         /,
         widget: QWidget | None = None,
     ) -> None:
-        painter.setPen(QPen(QColor(100, 100, 100), 1))
-        painter.setBrush(QColor(150, 150, 150))
+        if self.isSelected():
+            painter.setPen(QPen(QColor(0, 0, 0), 1))
+            painter.setBrush(QColor(0, 0, 0))
+        elif self._is_net_selected():
+            painter.setPen(QPen(QColor(255, 0, 0), 1))
+            painter.setBrush(QColor(255, 0, 0))
+        else:
+            painter.setPen(QPen(QColor(100, 100, 100), 1))
+            painter.setBrush(QColor(150, 150, 150))
         painter.drawEllipse(QPointF(0, 0), 4, 4)
 
     def itemChange(self, change, value):
