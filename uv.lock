@@ -273,7 +273,6 @@ name = "netlist-viewer"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "beartype" },
     { name = "networkx" },
     { name = "pyside6" },
     { name = "scipy" },
@@ -281,6 +280,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "beartype" },
     { name = "matplotlib" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -290,7 +290,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "beartype", specifier = ">=0.22.9" },
     { name = "networkx", specifier = ">=3.6.1" },
     { name = "pyside6", specifier = ">=6.10.2" },
     { name = "scipy", specifier = ">=1.17.0" },
@@ -298,6 +297,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "beartype", specifier = ">=0.22.9" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.2" },

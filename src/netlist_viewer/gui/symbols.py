@@ -1,6 +1,6 @@
 """Declarative symbol definitions for circuit components."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
 from netlist_viewer.core_types import Number
@@ -72,7 +72,7 @@ Shape = (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class Pin:
     """A connection point on a symbol."""
 
@@ -82,7 +82,7 @@ class Pin:
     side: PinSide = PinSide.LEFT
 
 
-@dataclass
+@dataclass(frozen=True)
 class SymbolDef:
     """Declarative symbol definition - geometry and pins."""
 
@@ -90,7 +90,7 @@ class SymbolDef:
     width: Number
     height: Number
     pins: list[Pin]
-    shapes: list[Shape] = field(default_factory=list)
+    shapes: list[Shape]
 
 
 def create_subckt_symbol(subckt_name: str, port_names: list[str]) -> SymbolDef:

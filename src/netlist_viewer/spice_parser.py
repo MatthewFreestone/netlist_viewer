@@ -17,7 +17,7 @@ class SpiceFormatError(BaseException):
         self.add_note(f"{reason} @ {line}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class SubcktDef:
     name: str
     ports: list[str]
@@ -45,22 +45,23 @@ class SpiceParser:
         return result
 
 
-@dataclass
+@dataclass(frozen=True)
 class Netlist:
     instances: list[Instance]
     subckts: dict[str, SubcktDef]
     global_nets: list[str]
 
 
-class NetlistBuilder:
-    @dataclass
-    class InProgressSubckt:
-        name: str
-        ports: list[str]
-        parameters: Parameters
-        parent_scope: list[Instance]
+@dataclass(frozen=True)
+class _InProgressSubckt:
+    name: str
+    ports: list[str]
+    parameters: Parameters
+    parent_scope: list[Instance]
 
-    build_stack: list[InProgressSubckt]
+
+class NetlistBuilder:
+    build_stack: list[_InProgressSubckt]
     scope: list[Instance]
     subckts: dict[str, SubcktDef]
     global_nets: list[str]
@@ -111,7 +112,7 @@ class NetlistBuilder:
                 ports.append(token)
 
         # Push current scope onto stack and start new scope
-        new_frame = NetlistBuilder.InProgressSubckt(name, ports, parameters, self.scope)
+        new_frame = _InProgressSubckt(name, ports, parameters, self.scope)
         self.build_stack.append(new_frame)
         self.scope = []
 
@@ -197,7 +198,7 @@ class SyntaxHelpers:
         return False
 
 
-@dataclass
+@dataclass(frozen=True)
 class Instance:
     primitive: Primitive
     nets: list[str]

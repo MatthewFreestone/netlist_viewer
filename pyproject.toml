@@ -3,13 +3,30 @@ name = "netlist_viewer"
 version = "0.1.0"
 description = "Visualize SPICE netlists as interactive circuit diagrams"
 readme = "README.md"
-requires-python = ">=3.13"
+license = "MIT"
+requires-python = ">=3.12"
+keywords = ["spice", "netlist", "circuit", "schematic", "viewer", "electronics", "eda"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
 dependencies = [
-    "beartype>=0.22.9",
     "networkx>=3.6.1",
     "pyside6>=6.10.2",
     "scipy>=1.17.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/MatthewFreestone/netlist_viewer"
+Repository = "https://github.com/MatthewFreestone/netlist_viewer"
 
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
@@ -20,6 +37,7 @@ netlist_viewer = "netlist_viewer.gui.main:cli_main"
 
 [dependency-groups]
 dev = [
+    "beartype>=0.22.9",
     "matplotlib>=3.10.8",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",

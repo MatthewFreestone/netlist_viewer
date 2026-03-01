@@ -1,3 +1,6 @@
-from beartype.claw import beartype_this_package
+try:
+    from beartype.claw import beartype_this_package
 
-beartype_this_package()
+    beartype_this_package()
+except ImportError:
+    pass

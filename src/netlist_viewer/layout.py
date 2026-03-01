@@ -14,7 +14,7 @@ NET_INDICATOR = "$NET$"
 # nodes added to a net are str, actual instances are int
 
 
-@dataclass
+@dataclass(frozen=True)
 class NGTopologyEdge:
     start: NodeReference
     end: NodeReference
@@ -22,7 +22,7 @@ class NGTopologyEdge:
     net: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class NGWeightHintEdge:
     """An edge which only exists to assist spring layout"""
 
@@ -31,7 +31,7 @@ class NGWeightHintEdge:
     weight: Number
 
 
-@dataclass
+@dataclass(frozen=True)
 class NetlistGraph:
     """An representation of a netlist graph; allows identical edges on different nets"""
 
@@ -86,13 +86,13 @@ class NetlistGraph:
         return g
 
 
-@dataclass
+@dataclass(frozen=True)
 class Point:
     x: float
     y: float
 
 
-@dataclass
+@dataclass(frozen=True)
 class PlacedInstance:
     instance: Instance
     location: Point
@@ -101,7 +101,7 @@ class PlacedInstance:
         return self.instance.name
 
 
-@dataclass
+@dataclass(frozen=True)
 class PlacedNet:
     name: str
     location: Point
@@ -110,14 +110,14 @@ class PlacedNet:
         return self.name
 
 
-@dataclass
+@dataclass(frozen=True)
 class Edge:
     start: NodeReference
     end: NodeReference
     net: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class PlacedNetlist:
     source: Netlist
     instances: list[PlacedInstance]
