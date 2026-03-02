@@ -1,6 +1,6 @@
 [project]
 name = "netlist_viewer"
-version = "0.0.1"
+version = "0.0.2b1"
 description = "Visualize SPICE netlists as interactive circuit diagrams"
 readme = "README.md"
 license = "MIT"
@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "networkx>=3.6.1",
-    "pyside6>=6.10.2",
+    "pyside6-essentials>=6.10.2",
     "scipy>=1.17.0",
 ]
 

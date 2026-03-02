@@ -1,5 +1,5 @@
 from __future__ import annotations
-from beartype.typing import Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 import enum
 import logging
