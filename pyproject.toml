@@ -1,6 +1,6 @@
 [project]
 name = "netlist_viewer"
-version = "0.1.1b1"
+version = "0.1.2"
 description = "Visualize SPICE netlists as interactive circuit diagrams"
 readme = "README.md"
 license = "MIT"
