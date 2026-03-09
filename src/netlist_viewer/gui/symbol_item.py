@@ -49,7 +49,7 @@ class ConnectableItem(QGraphicsItem):
 
 
 class WireItem(QGraphicsPathItem):
-    """A wire connecting two graphics items with L-shaped orthogonal routing."""
+    """A wire connecting two graphics items, drawn as a polyline."""
 
     DEFAULT_COLOR = QColor(80, 80, 80)
     SELECTED_COLOR = QColor(255, 0, 0)
@@ -61,6 +61,7 @@ class WireItem(QGraphicsPathItem):
         start_pin: str | None = None,
         end_pin: str | None = None,
         net: str | None = None,
+        points: list[QPointF] | None = None,
     ):
         super().__init__()
         assert isinstance(start_pin, str) or isinstance(end_pin, str)
@@ -72,7 +73,20 @@ class WireItem(QGraphicsPathItem):
         self.sibling_wires: list[WireItem] = []  # Other wires on same net
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setPen(QPen(self.DEFAULT_COLOR, 1.5))
-        self.update_position()
+        if points is not None:
+            self.set_points(points)
+        else:
+            self.update_position()
+
+    def set_points(self, points: list[QPointF]) -> None:
+        """Set wire path from pre-computed waypoints."""
+        if not points:
+            return
+        path = QPainterPath()
+        path.moveTo(points[0])
+        for pt in points[1:]:
+            path.lineTo(pt)
+        self.setPath(path)
 
     def shape(self) -> QPainterPath:
         """Return a narrow stroke around the wire for precise hit testing."""
@@ -115,29 +129,10 @@ class WireItem(QGraphicsPathItem):
             return item.pin_scene_pos(pin)
         return item.scenePos()
 
-    def _get_pin_side(self, item: ConnectableItem, pin: str | None) -> PinSide | None:
-        """Get the side a pin exits from, accounting for rotation."""
-        if pin is None:
-            return None
-        return item.get_pin_side(pin)
-
-    def _is_horizontal_exit(self, side: PinSide | None) -> bool:
-        """Check if a pin side exits horizontally."""
-        if side is None:
-            return True  # Default to horizontal for net nodes
-        return side in (PinSide.LEFT, PinSide.RIGHT)
-
-    def update_position(self):
-        """Update wire path based on connected items' positions using L-routing."""
+    def update_position(self) -> None:
+        """Update wire path with simple L-routing for interactive dragging."""
         start_pos = self._get_pos(self.start_item, self.start_pin)
         end_pos = self._get_pos(self.end_item, self.end_pin)
-
-        start_side = self._get_pin_side(self.start_item, self.start_pin)
-        end_side = self._get_pin_side(self.end_item, self.end_pin)
-
-        # Determine bend direction based on pin sides
-        start_horizontal = self._is_horizontal_exit(start_side)
-        end_horizontal = self._is_horizontal_exit(end_side)
 
         path = QPainterPath()
         path.moveTo(start_pos)
@@ -145,24 +140,13 @@ class WireItem(QGraphicsPathItem):
         dx = end_pos.x() - start_pos.x()
         dy = end_pos.y() - start_pos.y()
 
-        # If start and end are nearly aligned, draw straight line
-        if abs(dx) < 5 or abs(dy) < 5:
-            path.lineTo(end_pos)
-        elif start_horizontal and not end_horizontal:
-            # Start goes horizontal, end goes vertical: bend at (end_x, start_y)
-            path.lineTo(end_pos.x(), start_pos.y())
-            path.lineTo(end_pos)
-        elif not start_horizontal and end_horizontal:
-            # Start goes vertical, end goes horizontal: bend at (start_x, end_y)
-            path.lineTo(start_pos.x(), end_pos.y())
-            path.lineTo(end_pos)
-        elif start_horizontal:
-            # Both horizontal: go horizontal first, then vertical
-            path.lineTo(end_pos.x(), start_pos.y())
+        # If nearly aligned, draw straight line
+        if abs(dx) < 2 or abs(dy) < 2:
             path.lineTo(end_pos)
         else:
-            # Both vertical: go vertical first, then horizontal
-            path.lineTo(start_pos.x(), end_pos.y())
+            # Simple L-route: horizontal first, then vertical
+            bend = QPointF(end_pos.x(), start_pos.y())
+            path.lineTo(bend)
             path.lineTo(end_pos)
 
         self.setPath(path)

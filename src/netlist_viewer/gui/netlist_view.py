@@ -19,7 +19,8 @@ from netlist_viewer.gui.symbols import (
     CCVS,
     create_subckt_symbol,
 )
-from netlist_viewer.layout import PlacedInstance, PlacedNetlist, NET_INDICATOR
+from netlist_viewer.layout import PlacedInstance, NET_INDICATOR
+from netlist_viewer.routing import RoutedNetlist
 from netlist_viewer.spice_parser import Primitive, Instance, Netlist
 
 
@@ -59,8 +60,8 @@ class NetlistView(QtWidgets.QGraphicsView):
             QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse
         )
 
-    def load_netlist(self, placed: PlacedNetlist) -> None:
-        """Load a PlacedNetlist and populate the scene with graphics items."""
+    def load_netlist(self, routed: RoutedNetlist) -> None:
+        """Load a RoutedNetlist and populate the scene with graphics items."""
         self._scene.clear()
 
         # Maps to look up graphics items by their node key
@@ -68,20 +69,20 @@ class NetlistView(QtWidgets.QGraphicsView):
         net_node_items: dict[str, NetNodeItem] = {}
 
         # Create graphics items for each placed instance
-        for idx, placed_inst in enumerate(placed.instances):
+        for idx, placed_inst in enumerate(routed.instances):
             inst = placed_inst.instance
             x = placed_inst.location.x * self.LAYOUT_SCALE
             y = placed_inst.location.y * self.LAYOUT_SCALE
             params_str = " ".join(inst.parameters.unkeyed)
 
             item = self._create_item_for_primitive(
-                inst, x, y, params_str, placed.source
+                inst, x, y, params_str, routed.source
             )
             self._scene.addItem(item)
             instance_items.append(item)
 
         # Create graphics items for net junction nodes
-        for net_name, placed_net in placed.net_nodes.items():
+        for net_name, placed_net in routed.net_nodes.items():
             x = placed_net.location.x * self.LAYOUT_SCALE
             y = placed_net.location.y * self.LAYOUT_SCALE
             node_item = NetNodeItem(x, y, net_name)
@@ -89,36 +90,42 @@ class NetlistView(QtWidgets.QGraphicsView):
             net_node_items[net_name] = node_item
 
         # Auto-orient instances based on neighbor positions
-        self._auto_orient_instances(placed, instance_items, net_node_items)
+        self._auto_orient_instances(routed, instance_items, net_node_items)
 
-        # Draw wires for edges, connecting items at the correct pins
+        # Draw wires from pre-computed routes
         # Track wires by net so we can link siblings
         wires_by_net: dict[str, list[WireItem]] = {}
 
-        for edge in placed.edges:
-            start_key, end_key, net = edge.start, edge.end, edge.net
-            logging.debug(f"Finding pins for edge {edge}")
-            logging.debug(
-                f"Edge is between {placed.get_node(start_key).get_name()} to {placed.get_node(end_key).get_name()}"
-            )
+        for routed_wire in routed.wires:
+            start_key = routed_wire.start
+            end_key = routed_wire.end
+            net = routed_wire.net
+
+            logging.debug(f"Creating wire for {routed_wire}")
 
             start_item: SymbolItem | NetNodeItem
             end_item: SymbolItem | NetNodeItem
-            start_pin: str | None = None
-            end_pin: str | None = None
             if isinstance(start_key, int):
                 start_item = instance_items[start_key]
-                start_pin = self._find_pin_for_net(placed.instances[start_key], net)
             else:
                 start_item = net_node_items[start_key]
 
             if isinstance(end_key, int):
                 end_item = instance_items[end_key]
-                end_pin = self._find_pin_for_net(placed.instances[end_key], net)
             else:
                 end_item = net_node_items[end_key]
 
-            wire = WireItem(start_item, end_item, start_pin, end_pin, net=net)
+            # Convert Point waypoints to QPointF
+            points = [QtCore.QPointF(pt.x, pt.y) for pt in routed_wire.points]
+
+            wire = WireItem(
+                start_item,
+                end_item,
+                routed_wire.start_pin,
+                routed_wire.end_pin,
+                net=net,
+                points=points,
+            )
             self._scene.addItem(wire)
 
             # Register wire with both connected items
@@ -142,13 +149,13 @@ class NetlistView(QtWidgets.QGraphicsView):
 
     def _auto_orient_instances(
         self,
-        placed: PlacedNetlist,
+        routed: RoutedNetlist,
         instance_items: list[SymbolItem],
         net_node_items: dict[str, NetNodeItem],
     ) -> None:
         """Compute and apply optimal orientation for each instance based on neighbors."""
 
-        for idx, placed_inst in enumerate(placed.instances):
+        for idx, placed_inst in enumerate(routed.instances):
             item = instance_items[idx]
             inst = placed_inst.instance
             item_pos = item.pos()
@@ -160,7 +167,7 @@ class NetlistView(QtWidgets.QGraphicsView):
                 pin_neighbors[pin_name] = []
 
                 # Find neighbors connected via this net
-                for edge in placed.edges:
+                for edge in routed.edges:
                     if edge.net != net:
                         continue
                     # Check if this instance is part of this edge

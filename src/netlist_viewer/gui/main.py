@@ -4,7 +4,8 @@ from pathlib import Path
 from PySide6 import QtWidgets, QtGui
 
 from netlist_viewer.gui.netlist_view import NetlistView
-from netlist_viewer.layout import PlacedNetlist, add_spring_locations
+from netlist_viewer.layout import add_spring_locations
+from netlist_viewer.routing import RoutedNetlist, route_netlist
 from netlist_viewer.spice_parser import SpiceParser
 
 
@@ -100,7 +101,8 @@ class MainWindow(QtWidgets.QMainWindow):
             parser = SpiceParser()
             netlist = parser.parse(text)
             placed = add_spring_locations(netlist)
-            self.load_netlist(placed)
+            routed = route_netlist(placed)
+            self.load_netlist(routed)
             self.setWindowTitle(f"Netlist Viewer - {Path(file_path).name}")
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to load file:\n{e}")
@@ -109,15 +111,15 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = HelpDialog(self)
         dialog.exec()
 
-    def load_netlist(self, placed: PlacedNetlist):
-        """Load a PlacedNetlist into the view."""
-        self.view.load_netlist(placed)
+    def load_netlist(self, routed: RoutedNetlist):
+        """Load a RoutedNetlist into the view."""
+        self.view.load_netlist(routed)
 
 
-def open_ui(netlist: PlacedNetlist):
+def open_ui(routed: RoutedNetlist):
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
-    window.load_netlist(netlist)
+    window.load_netlist(routed)
     window.show()
     sys.exit(app.exec())
 
@@ -149,12 +151,14 @@ def cli_main():
         format="%(levelname)s: %(message)s",
     )
 
+    assert isinstance(args.file, Path)
+
     if not args.file.exists():
         logging.error("File not found: %s", args.file)
         sys.exit(1)
-
     netlist_text = args.file.read_text()
     spice_parser = SpiceParser()
     netlist = spice_parser.parse(netlist_text)
     placed = add_spring_locations(netlist)
-    open_ui(placed)
+    routed = route_netlist(placed)
+    open_ui(routed)

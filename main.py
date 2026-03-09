@@ -1,4 +1,5 @@
 from netlist_viewer.layout import add_spring_locations
+from netlist_viewer.routing import route_netlist
 from netlist_viewer.gui.main import open_ui
 from netlist_viewer.spice_parser import SpiceParser
 import logging
@@ -36,4 +37,5 @@ if __name__ == "__main__":
     parser = SpiceParser()
     components = parser.parse(netlist)
     placed = add_spring_locations(components)
-    open_ui(placed)
+    routed = route_netlist(placed)
+    open_ui(routed)
