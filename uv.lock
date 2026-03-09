@@ -309,7 +309,7 @@ wheels = [
 
 [[package]]
 name = "netlist-viewer"
-version = "0.1.1b1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "networkx" },

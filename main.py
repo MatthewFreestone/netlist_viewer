@@ -8,33 +8,30 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     netlist = """
-    * Inverter subcircuit
-    .SUBCKT inv in out VDD VSS
-    M1 out in VDD VDD PMOS W=2u L=1u
-    M2 out in VSS VSS NMOS W=1u L=1u
-    .ENDS
-
-    * Buffer subcircuit (two inverters)
-    .SUBCKT buf in out VDD VSS
-    X1 in mid VDD VSS inv
-    X2 mid out VDD VSS inv
-    .ENDS
-
-    * 2-port subckt
-    .SUBCKT res1 a b r=10k
-    R1 a b r=r/2
-    R2 a b r=r/2
-    .ENDS
-
-    * Top level circuit
+    * Demo circuit with controlled sources
     V1 vcc 0 DC 5
-    X0 input vcc res1 r=10k
+    Vin input 0 AC 1
 
-    X1 input n1 vcc 0 inv
-    X2 n1 n2 vcc 0 inv
-    X3 n2 output vcc 0 buf
+    * Input network
+    R1 vcc input 10k
+    C1 input 0 1u
 
-    C1 output 0 10p
+    * Voltage-controlled voltage source (amplifier)
+    E1 n2 0 vcc input 10
+
+    * Voltage-controlled current source (transconductance)
+    G1 n3 0 
+       + input 0 1m
+    R2 n3 0 1k
+
+    * Current sensing and controlled sources
+    Vsense n2 n4 DC 0
+    F1 n4 0 Vsense 2
+    H1 output 0 Vsense 1k
+
+    * Output load
+    R3 output 0 10k
+    C2 output 0 10p
     """
     parser = SpiceParser()
     components = parser.parse(netlist)

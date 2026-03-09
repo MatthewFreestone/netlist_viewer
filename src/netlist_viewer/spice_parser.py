@@ -32,7 +32,9 @@ class SpiceParser:
         if isinstance(syntax, str):
             syntax = syntax.splitlines()
 
-        assert isinstance(syntax, list)
+        # Handle line continuations (lines starting with +)
+        syntax = self._join_continuations(list(syntax))
+
         for line in syntax:
             builder.handle_line(line)
 
@@ -42,6 +44,18 @@ class SpiceParser:
         result = Netlist(builder.scope, builder.subckts, builder.global_nets)
         end_time = time.time()
         logging.info("Parsed netlist in %f s", end_time - start_time)
+        return result
+
+    def _join_continuations(self, lines: list[str]) -> list[str]:
+        """Join continuation lines (starting with +) to the previous line."""
+        result: list[str] = []
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith("+") and result:
+                # Append to previous line (strip the + and leading whitespace)
+                result[-1] = result[-1] + " " + stripped[1:].lstrip()
+            else:
+                result.append(line)
         return result
 
 
@@ -261,6 +275,10 @@ class Primitive(enum.Enum):
     JFET = "J"
     VSOURCE = "V"
     ISOURCE = "I"
+    VCVS = "E"  # Voltage-controlled voltage source
+    VCCS = "G"  # Voltage-controlled current source
+    CCCS = "F"  # Current-controlled current source
+    CCVS = "H"  # Current-controlled voltage source
     SUBCKT = "X"
     UNKNOWN = "?"
 
@@ -270,10 +288,12 @@ class Primitive(enum.Enum):
                 return 2
             case Primitive.ISOURCE | Primitive.VSOURCE:
                 return 2
+            case Primitive.CCCS | Primitive.CCVS:
+                return 2  # F/H: out+, out- (Vname reference is a parameter)
             case Primitive.BJT | Primitive.JFET:
                 return 3
-            case Primitive.MOSFET:
-                return 4
+            case Primitive.MOSFET | Primitive.VCVS | Primitive.VCCS:
+                return 4  # E/G: out+, out-, ctrl+, ctrl-
             case Primitive.SUBCKT:
                 return -1  # Variable, determined by subckt definition
         return -1

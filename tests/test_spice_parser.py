@@ -283,3 +283,112 @@ def test_subckt_case_insensitive():
     assert "myinv" in result.subckts
     assert len(result.instances) == 1
     assert result.instances[0].subckt_name == "myinv"
+
+
+def test_parse_vcvs():
+    """Test voltage-controlled voltage source (E element)."""
+    parser = SpiceParser()
+    components = parser.parse(["E1 out+ out- ctrl+ ctrl- 10"]).instances
+
+    assert len(components) == 1
+    assert components[0].name == "E1"
+    assert components[0].primitive == Primitive.VCVS
+    assert components[0].nets == ["out+", "out-", "ctrl+", "ctrl-"]
+    assert components[0].parameters.unkeyed == ["10"]
+
+
+def test_parse_vccs():
+    """Test voltage-controlled current source (G element)."""
+    parser = SpiceParser()
+    components = parser.parse(["G1 out+ out- ctrl+ ctrl- 1m"]).instances
+
+    assert len(components) == 1
+    assert components[0].name == "G1"
+    assert components[0].primitive == Primitive.VCCS
+    assert components[0].nets == ["out+", "out-", "ctrl+", "ctrl-"]
+    assert components[0].parameters.unkeyed == ["1m"]
+
+
+def test_parse_cccs():
+    """Test current-controlled current source (F element)."""
+    parser = SpiceParser()
+    components = parser.parse(["F1 out+ out- Vsense 2"]).instances
+
+    assert len(components) == 1
+    assert components[0].name == "F1"
+    assert components[0].primitive == Primitive.CCCS
+    assert components[0].nets == ["out+", "out-"]
+    assert components[0].parameters.unkeyed == ["Vsense", "2"]
+
+
+def test_parse_ccvs():
+    """Test current-controlled voltage source (H element)."""
+    parser = SpiceParser()
+    components = parser.parse(["H1 out+ out- Vsense 1k"]).instances
+
+    assert len(components) == 1
+    assert components[0].name == "H1"
+    assert components[0].primitive == Primitive.CCVS
+    assert components[0].nets == ["out+", "out-"]
+    assert components[0].parameters.unkeyed == ["Vsense", "1k"]
+
+
+def test_line_continuation():
+    """Test that lines starting with + are joined to previous line."""
+    netlist = """
+    R1 node1 node2
+    + 10k
+    + param=value
+    """.splitlines()
+
+    parser = SpiceParser()
+    components = parser.parse(netlist).instances
+
+    assert len(components) == 1
+    assert components[0].name == "R1"
+    assert components[0].nets == ["node1", "node2"]
+    assert components[0].parameters.unkeyed == ["10k"]
+    assert ("param", "value") in components[0].parameters.keyed
+
+
+def test_line_continuation_multiple():
+    """Test multiple continuation lines and multiple components."""
+    netlist = """
+    E1 out 0
+    + ctrl+ ctrl-
+    + 100
+    R1 out 0 1k
+    """.splitlines()
+
+    parser = SpiceParser()
+    components = parser.parse(netlist).instances
+
+    assert len(components) == 2
+    assert components[0].primitive == Primitive.VCVS
+    assert components[0].nets == ["out", "0", "ctrl+", "ctrl-"]
+    assert components[0].parameters.unkeyed == ["100"]
+    assert components[1].primitive == Primitive.RES
+
+
+def test_controlled_sources_circuit():
+    """Test a circuit using all controlled source types."""
+    netlist = """
+    V1 in 0 AC 1
+    E1 amp1 0 in 0 10
+    G1 amp2 0 in 0 1m
+    Vsense amp1 mid 0
+    F1 out1 0 Vsense 5
+    H1 out2 0 Vsense 1k
+    R1 out1 0 1k
+    R2 out2 0 1k
+    """.splitlines()
+
+    parser = SpiceParser()
+    components = parser.parse(netlist).instances
+
+    assert len(components) == 8
+    primitives = [c.primitive for c in components]
+    assert Primitive.VCVS in primitives
+    assert Primitive.VCCS in primitives
+    assert Primitive.CCCS in primitives
+    assert Primitive.CCVS in primitives

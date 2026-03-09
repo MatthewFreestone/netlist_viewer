@@ -431,3 +431,138 @@ JFET = SymbolDef(
         TerminalShape(pos=(0, 25)),
     ],
 )
+
+# VCVS (E) - Voltage-controlled voltage source
+# pins: 1=out+, 2=out-, 3=ctrl+, 4=ctrl-
+VCVS = SymbolDef(
+    name="vcvs",
+    width=60,
+    height=50,
+    pins=[
+        Pin("1", 30, -15, PinSide.RIGHT),  # out+
+        Pin("2", 30, 15, PinSide.RIGHT),  # out-
+        Pin("3", -30, -15, PinSide.LEFT),  # ctrl+
+        Pin("4", -30, 15, PinSide.LEFT),  # ctrl-
+    ],
+    shapes=[
+        # Diamond shape
+        PolygonShape(
+            points=((0, -20), (20, 0), (0, 20), (-20, 0)),
+            filled=False,
+        ),
+        # Output leads (right side)
+        LineShape(p1=(20, 0), p2=(30, 0)),
+        LineShape(p1=(30, 0), p2=(30, -15)),
+        LineShape(p1=(30, 0), p2=(30, 15)),
+        # Control leads (left side)
+        LineShape(p1=(-20, 0), p2=(-30, 0)),
+        LineShape(p1=(-30, 0), p2=(-30, -15)),
+        LineShape(p1=(-30, 0), p2=(-30, 15)),
+        # Plus/minus on output side
+        LineShape(p1=(8, -5), p2=(14, -5)),  # minus (top)
+        LineShape(p1=(8, 5), p2=(14, 5)),  # plus horizontal
+        LineShape(p1=(11, 2), p2=(11, 8)),  # plus vertical
+        # Plus/minus on control side
+        LineShape(p1=(-14, -5), p2=(-8, -5)),  # plus horizontal
+        LineShape(p1=(-11, -8), p2=(-11, -2)),  # plus vertical
+        LineShape(p1=(-14, 5), p2=(-8, 5)),  # minus
+        TerminalShape(pos=(30, -15)),
+        TerminalShape(pos=(30, 15)),
+        TerminalShape(pos=(-30, -15)),
+        TerminalShape(pos=(-30, 15)),
+    ],
+)
+
+# VCCS (G) - Voltage-controlled current source
+# pins: 1=out+, 2=out-, 3=ctrl+, 4=ctrl-
+VCCS = SymbolDef(
+    name="vccs",
+    width=60,
+    height=50,
+    pins=[
+        Pin("1", 30, -15, PinSide.RIGHT),  # out+
+        Pin("2", 30, 15, PinSide.RIGHT),  # out-
+        Pin("3", -30, -15, PinSide.LEFT),  # ctrl+
+        Pin("4", -30, 15, PinSide.LEFT),  # ctrl-
+    ],
+    shapes=[
+        # Diamond shape
+        PolygonShape(
+            points=((0, -20), (20, 0), (0, 20), (-20, 0)),
+            filled=False,
+        ),
+        # Output leads (right side)
+        LineShape(p1=(20, 0), p2=(30, 0)),
+        LineShape(p1=(30, 0), p2=(30, -15)),
+        LineShape(p1=(30, 0), p2=(30, 15)),
+        # Control leads (left side)
+        LineShape(p1=(-20, 0), p2=(-30, 0)),
+        LineShape(p1=(-30, 0), p2=(-30, -15)),
+        LineShape(p1=(-30, 0), p2=(-30, 15)),
+        # Arrow inside diamond (current direction)
+        LineShape(p1=(-5, 0), p2=(10, 0)),
+        PolygonShape(points=((10, 0), (5, -3), (5, 3)), filled=True),
+        # Plus/minus on control side
+        LineShape(p1=(-14, -5), p2=(-8, -5)),  # plus horizontal
+        LineShape(p1=(-11, -8), p2=(-11, -2)),  # plus vertical
+        LineShape(p1=(-14, 5), p2=(-8, 5)),  # minus
+        TerminalShape(pos=(30, -15)),
+        TerminalShape(pos=(30, 15)),
+        TerminalShape(pos=(-30, -15)),
+        TerminalShape(pos=(-30, 15)),
+    ],
+)
+
+# CCCS (F) - Current-controlled current source
+# pins: 1=out+, 2=out- (Vname reference is a parameter)
+CCCS = SymbolDef(
+    name="cccs",
+    width=50,
+    height=30,
+    pins=[
+        Pin("1", -25, 0, PinSide.LEFT),
+        Pin("2", 25, 0, PinSide.RIGHT),
+    ],
+    shapes=[
+        # Diamond shape
+        PolygonShape(
+            points=((0, -15), (15, 0), (0, 15), (-15, 0)),
+            filled=False,
+        ),
+        LineShape(p1=(-25, 0), p2=(-15, 0)),  # left lead
+        LineShape(p1=(15, 0), p2=(25, 0)),  # right lead
+        # Arrow inside (current direction)
+        LineShape(p1=(-6, 0), p2=(6, 0)),
+        PolygonShape(points=((6, 0), (1, -3), (1, 3)), filled=True),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
+    ],
+)
+
+# CCVS (H) - Current-controlled voltage source
+# pins: 1=out+, 2=out- (Vname reference is a parameter)
+CCVS = SymbolDef(
+    name="ccvs",
+    width=50,
+    height=30,
+    pins=[
+        Pin("1", -25, 0, PinSide.LEFT),  # positive
+        Pin("2", 25, 0, PinSide.RIGHT),  # negative
+    ],
+    shapes=[
+        # Diamond shape
+        PolygonShape(
+            points=((0, -15), (15, 0), (0, 15), (-15, 0)),
+            filled=False,
+        ),
+        LineShape(p1=(-25, 0), p2=(-15, 0)),  # left lead
+        LineShape(p1=(15, 0), p2=(25, 0)),  # right lead
+        # Plus sign (left side inside diamond)
+        LineShape(p1=(-8, 0), p2=(-2, 0)),
+        LineShape(p1=(-5, -3), p2=(-5, 3)),
+        # Minus sign (right side inside diamond)
+        LineShape(p1=(2, 0), p2=(8, 0)),
+        TerminalShape(pos=(-25, 0)),
+        TerminalShape(pos=(25, 0)),
+    ],
+)

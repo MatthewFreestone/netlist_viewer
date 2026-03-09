@@ -13,6 +13,10 @@ from netlist_viewer.gui.symbols import (
     JFET,
     VOLTAGE_SOURCE,
     CURRENT_SOURCE,
+    VCVS,
+    VCCS,
+    CCCS,
+    CCVS,
     create_subckt_symbol,
 )
 from netlist_viewer.layout import PlacedInstance, PlacedNetlist, NET_INDICATOR
@@ -30,6 +34,10 @@ PRIMITIVE_SYMBOLS = {
     Primitive.JFET: JFET,
     Primitive.VSOURCE: VOLTAGE_SOURCE,
     Primitive.ISOURCE: CURRENT_SOURCE,
+    Primitive.VCVS: VCVS,
+    Primitive.VCCS: VCCS,
+    Primitive.CCCS: CCCS,
+    Primitive.CCVS: CCVS,
 }
 
 
