@@ -142,6 +142,12 @@ class NetlistView(QtWidgets.QGraphicsView):
             for wire in wires:
                 wire.sibling_wires = [w for w in wires if w is not wire]
 
+        # Re-route all wires using actual pin positions from SymbolItems
+        # (routing.py uses component centers, not actual pin offsets)
+        for wires in wires_by_net.values():
+            for wire in wires:
+                wire.update_position()
+
         # Fit the view to show all items
         self.fitInView(
             self._scene.itemsBoundingRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio

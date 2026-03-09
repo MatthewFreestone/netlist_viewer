@@ -32,6 +32,8 @@ from netlist_viewer.gui.symbols import (
     TextShape,
 )
 from netlist_viewer.core_types import Number
+from netlist_viewer.layout import Point
+from netlist_viewer.routing import BBox, _route_edge
 
 
 class ConnectableItem(QGraphicsItem):
@@ -129,25 +131,44 @@ class WireItem(QGraphicsPathItem):
             return item.pin_scene_pos(pin)
         return item.scenePos()
 
+    def _collect_bboxes(self) -> list[BBox]:
+        """Collect bounding boxes of all SymbolItems in the scene."""
+        scene = self.scene()
+        if scene is None:
+            return []
+
+        bboxes: list[BBox] = []
+        for item in scene.items():
+            if isinstance(item, SymbolItem):
+                rect = item.sceneBoundingRect()
+                bboxes.append(
+                    BBox(
+                        left=rect.left(),
+                        top=rect.top(),
+                        right=rect.right(),
+                        bottom=rect.bottom(),
+                    )
+                )
+        return bboxes
+
     def update_position(self) -> None:
-        """Update wire path with simple L-routing for interactive dragging."""
+        """Update wire path with routing that avoids component bodies."""
         start_pos = self._get_pos(self.start_item, self.start_pin)
         end_pos = self._get_pos(self.end_item, self.end_pin)
 
+        # Collect all component bboxes for routing
+        all_bboxes = self._collect_bboxes()
+
+        # Route using the routing module
+        start_pt = Point(start_pos.x(), start_pos.y())
+        end_pt = Point(end_pos.x(), end_pos.y())
+        waypoints = _route_edge(start_pt, end_pt, all_bboxes)
+
+        # Convert waypoints to path
         path = QPainterPath()
-        path.moveTo(start_pos)
-
-        dx = end_pos.x() - start_pos.x()
-        dy = end_pos.y() - start_pos.y()
-
-        # If nearly aligned, draw straight line
-        if abs(dx) < 2 or abs(dy) < 2:
-            path.lineTo(end_pos)
-        else:
-            # Simple L-route: horizontal first, then vertical
-            bend = QPointF(end_pos.x(), start_pos.y())
-            path.lineTo(bend)
-            path.lineTo(end_pos)
+        path.moveTo(QPointF(waypoints[0].x, waypoints[0].y))
+        for pt in waypoints[1:]:
+            path.lineTo(QPointF(pt.x, pt.y))
 
         self.setPath(path)
 

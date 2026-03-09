@@ -95,19 +95,27 @@ def _segment_crosses_rect(
     return False
 
 
+def _route_crosses_bboxes(
+    segments: list[tuple[Point, Point]],
+    bboxes: list[BBox],
+) -> bool:
+    """Check if any segment crosses any bbox."""
+    for p1, p2 in segments:
+        for bbox in bboxes:
+            if _segment_crosses_rect(p1, p2, bbox):
+                return True
+    return False
+
+
 def _l_route_crosses_bbox(
     start: Point,
     bend: Point,
     end: Point,
-    start_bbox: BBox | None,
-    end_bbox: BBox | None,
+    bboxes: list[BBox],
 ) -> bool:
-    """Check if an L-route would cross through either endpoint's bbox."""
-    if _segment_crosses_rect(start, bend, start_bbox):
-        return True
-    if _segment_crosses_rect(bend, end, end_bbox):
-        return True
-    return False
+    """Check if an L-route would cross through any bbox."""
+    segments = [(start, bend), (bend, end)]
+    return _route_crosses_bboxes(segments, bboxes)
 
 
 def _get_pin_position(
@@ -145,8 +153,7 @@ def _get_pin_position(
 def _route_edge(
     start_pos: Point,
     end_pos: Point,
-    start_bbox: BBox | None,
-    end_bbox: BBox | None,
+    all_bboxes: list[BBox],
     prefer_horizontal: bool = True,
 ) -> tuple[Point, ...]:
     """Route a wire between two points, avoiding bboxes.
@@ -165,8 +172,8 @@ def _route_edge(
     bend_v = Point(start_pos.x, end_pos.y)  # vertical first
 
     # Check which routes cross component bodies
-    h_crosses = _l_route_crosses_bbox(start_pos, bend_h, end_pos, start_bbox, end_bbox)
-    v_crosses = _l_route_crosses_bbox(start_pos, bend_v, end_pos, start_bbox, end_bbox)
+    h_crosses = _l_route_crosses_bbox(start_pos, bend_h, end_pos, all_bboxes)
+    v_crosses = _l_route_crosses_bbox(start_pos, bend_v, end_pos, all_bboxes)
 
     # Prefer based on pin side, but avoid crossings
     if prefer_horizontal and not h_crosses:
@@ -178,31 +185,63 @@ def _route_edge(
     elif not v_crosses:
         return (start_pos, bend_v, end_pos)
     else:
-        # Both L-routes cross - use U-routing around the obstacle
-        if start_bbox is None:
-            # No bbox to avoid, just use preferred L-route
-            if prefer_horizontal:
-                return (start_pos, bend_h, end_pos)
-            else:
-                return (start_pos, bend_v, end_pos)
-        elif prefer_horizontal:
-            # Go horizontal away from end, then vertical, then to end
-            escape_x = start_bbox.left - 15 if dx > 0 else start_bbox.right + 15
-            return (
-                start_pos,
-                Point(escape_x, start_pos.y),
-                Point(escape_x, end_pos.y),
-                end_pos,
-            )
+        # Both L-routes cross - try U-routing around obstacles
+        # Compute escape points for both horizontal and vertical U-routes
+        u_routes: list[tuple[Point, ...]] = []
+
+        if all_bboxes:
+            # Find the combined bounding box of all obstacles
+            min_x = min(b.left for b in all_bboxes)
+            max_x = max(b.right for b in all_bboxes)
+            min_y = min(b.top for b in all_bboxes)
+            max_y = max(b.bottom for b in all_bboxes)
+
+            # Try horizontal-first U-route (escape left or right)
+            for escape_x in [min_x - 15, max_x + 15]:
+                route = (
+                    start_pos,
+                    Point(escape_x, start_pos.y),
+                    Point(escape_x, end_pos.y),
+                    end_pos,
+                )
+                segments = [
+                    (route[0], route[1]),
+                    (route[1], route[2]),
+                    (route[2], route[3]),
+                ]
+                if not _route_crosses_bboxes(segments, all_bboxes):
+                    u_routes.append(route)
+
+            # Try vertical-first U-route (escape top or bottom)
+            for escape_y in [min_y - 15, max_y + 15]:
+                route = (
+                    start_pos,
+                    Point(start_pos.x, escape_y),
+                    Point(end_pos.x, escape_y),
+                    end_pos,
+                )
+                segments = [
+                    (route[0], route[1]),
+                    (route[1], route[2]),
+                    (route[2], route[3]),
+                ]
+                if not _route_crosses_bboxes(segments, all_bboxes):
+                    u_routes.append(route)
+
+        # Return shortest valid U-route, or fall back to simple L-route
+        if u_routes:
+            # Prefer route matching preferred direction
+            for route in u_routes:
+                is_h_first = route[0].y == route[1].y
+                if is_h_first == prefer_horizontal:
+                    return route
+            return u_routes[0]
+
+        # Fallback: just use preferred L-route
+        if prefer_horizontal:
+            return (start_pos, bend_h, end_pos)
         else:
-            # Go vertical away from end, then horizontal, then to end
-            escape_y = start_bbox.top - 15 if dy > 0 else start_bbox.bottom + 15
-            return (
-                start_pos,
-                Point(start_pos.x, escape_y),
-                Point(end_pos.x, escape_y),
-                end_pos,
-            )
+            return (start_pos, bend_v, end_pos)
 
 
 def route_netlist(placed: PlacedNetlist) -> RoutedNetlist:
@@ -212,7 +251,7 @@ def route_netlist(placed: PlacedNetlist) -> RoutedNetlist:
     wire waypoints that avoid component bounding boxes.
     """
     # Compute bboxes for all instances
-    instance_bboxes = [_compute_instance_bbox(inst) for inst in placed.instances]
+    all_bboxes = [_compute_instance_bbox(inst) for inst in placed.instances]
 
     wires: list[RoutedWire] = []
 
@@ -220,14 +259,8 @@ def route_netlist(placed: PlacedNetlist) -> RoutedNetlist:
         start_pos, start_pin = _get_pin_position(placed, edge.start, edge.net)
         end_pos, end_pin = _get_pin_position(placed, edge.end, edge.net)
 
-        # Get bboxes for start/end if they are instances
-        start_bbox = (
-            instance_bboxes[edge.start] if isinstance(edge.start, int) else None
-        )
-        end_bbox = instance_bboxes[edge.end] if isinstance(edge.end, int) else None
-
-        # Route the edge
-        waypoints = _route_edge(start_pos, end_pos, start_bbox, end_bbox)
+        # Route the edge, checking against all component bboxes
+        waypoints = _route_edge(start_pos, end_pos, all_bboxes)
 
         wires.append(
             RoutedWire(
