@@ -9,30 +9,24 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     netlist = """
-    * Demo circuit with controlled sources
-    V1 vcc 0 DC 5
-    Vin input 0 AC 1
+    * Wilson current mirror
 
-    * Input network
-    R1 vcc input 10k
-    C1 input 0 1u
+    Vcc vcc 0 DC 10
 
-    * Voltage-controlled voltage source (amplifier)
-    E1 n2 0 vcc input 10
+    * Reference current (Iref = Vcc/Rref)
+    Rref vcc ref 10k
 
-    * Voltage-controlled current source (transconductance)
-    G1 n3 0 
-       + input 0 1m
-    R2 n3 0 1k
+    * Q1: reference transistor
+    Q1 ref base q1e NPN
 
-    * Current sensing and controlled sources
-    Vsense n2 n4 DC 0
-    F1 n4 0 Vsense 2
-    H1 output 0 Vsense 1k
+    * Q3: feedback transistor (improves output impedance)
+    Q3 q1e ref 0 NPN
+
+    * Q2: output transistor
+    Q2 out base 0 NPN
 
     * Output load
-    R3 output 0 10k
-    C2 output 0 10p
+    Rload vcc out 1k
     """
     parser = SpiceParser()
     components = parser.parse(netlist)

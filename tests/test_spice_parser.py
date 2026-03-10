@@ -52,8 +52,10 @@ def test_nx(sample_circuit):
     parser = SpiceParser()
     components = parser.parse(sample_circuit)
     g = NetlistGraph.from_netlist(components)
-    assert len(g.nodes) == 6  # 4 inst, net 2, net 0 split up split up
-    assert len(g.edges) == 7  # R1V1, R1-2, C1-2, C1-0, C2-0, C2-2, V1-0
+    # 4 instances + 2 net nodes (net 2 and 0 have 3+ connections)
+    assert len(g.nodes) == 6
+    # Net 1: direct R1-V1 edge, Net 2: 3 edges to net node, Net 0: 3 edges to net node
+    assert len(g.edges) == 7
 
 
 def test_parse_inductor():
@@ -392,3 +394,43 @@ def test_controlled_sources_circuit():
     assert Primitive.VCCS in primitives
     assert Primitive.CCCS in primitives
     assert Primitive.CCVS in primitives
+
+
+def test_wilson_current_mirror():
+    """Test Wilson current mirror circuit (main.py example)."""
+    netlist = """
+    * Wilson current mirror
+
+    Vcc vcc 0 DC 10
+
+    * Reference current
+    Rref vcc ref 10k
+
+    * Q1: reference transistor
+    Q1 ref base q1e NPN
+
+    * Q3: feedback transistor
+    Q3 q1e ref 0 NPN
+
+    * Q2: output transistor
+    Q2 out base 0 NPN
+
+    * Output load
+    Rload vcc out 1k
+    """.splitlines()
+
+    parser = SpiceParser()
+    result = parser.parse(netlist)
+
+    assert len(result.instances) == 6
+    names = [c.name for c in result.instances]
+    assert "Vcc" in names
+    assert "Rref" in names
+    assert "Q1" in names
+    assert "Q2" in names
+    assert "Q3" in names
+    assert "Rload" in names
+
+    # Verify BJTs
+    bjts = [c for c in result.instances if c.primitive == Primitive.BJT]
+    assert len(bjts) == 3

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QStyle,
 )
-from PySide6.QtCore import QPointF, QRectF
+from PySide6.QtCore import QPointF, QRectF, QTimer
 from PySide6.QtGui import (
     QPainter,
     QPen,
@@ -33,7 +33,7 @@ from netlist_viewer.gui.symbols import (
 )
 from netlist_viewer.core_types import Number
 from netlist_viewer.layout import Point
-from netlist_viewer.routing import BBox, _route_edge
+from netlist_viewer.routing import BBox, _route_edge, DEFAULT_GRID_RESOLUTION
 
 
 class ConnectableItem(QGraphicsItem):
@@ -55,6 +55,7 @@ class WireItem(QGraphicsPathItem):
 
     DEFAULT_COLOR = QColor(80, 80, 80)
     SELECTED_COLOR = QColor(255, 0, 0)
+    DEBOUNCE_MS = 150  # Delay before running full A* routing
 
     def __init__(
         self,
@@ -73,6 +74,8 @@ class WireItem(QGraphicsPathItem):
         self.end_pin = end_pin
         self.net = net
         self.sibling_wires: list[WireItem] = []  # Other wires on same net
+        self._route_timer: QTimer | None = None  # Debounce timer for A* routing
+        self._grid_resolution = DEFAULT_GRID_RESOLUTION
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setPen(QPen(self.DEFAULT_COLOR, 1.5))
         if points is not None:
@@ -151,18 +154,64 @@ class WireItem(QGraphicsPathItem):
                 )
         return bboxes
 
-    def update_position(self) -> None:
-        """Update wire path with routing that avoids component bodies."""
+    def _collect_other_wire_paths(
+        self,
+    ) -> list[tuple[tuple[Point, ...], str | None]]:
+        """Collect paths of all other wires in the scene with their net names."""
+        scene = self.scene()
+        if scene is None:
+            return []
+
+        paths: list[tuple[tuple[Point, ...], str | None]] = []
+        for item in scene.items():
+            if isinstance(item, WireItem) and item is not self:
+                # Extract points from the wire's current path
+                qpath = item.path()
+                if qpath.isEmpty():
+                    continue
+                points: list[Point] = []
+                for i in range(qpath.elementCount()):
+                    elem = qpath.elementAt(i)
+                    points.append(Point(elem.x, elem.y))
+                if len(points) >= 2:
+                    paths.append((tuple(points), item.net))
+        return paths
+
+    def _show_preview(self) -> None:
+        """Show a quick L-route preview while dragging (no A* computation)."""
+        start_pos = self._get_pos(self.start_item, self.start_pin)
+        end_pos = self._get_pos(self.end_item, self.end_pin)
+
+        # Simple L-route: horizontal then vertical
+        path = QPainterPath()
+        path.moveTo(start_pos)
+        bend = QPointF(end_pos.x(), start_pos.y())
+        path.lineTo(bend)
+        path.lineTo(end_pos)
+        self.setPath(path)
+
+    def _run_astar_routing(self) -> None:
+        """Run full A* routing (called after debounce delay)."""
         start_pos = self._get_pos(self.start_item, self.start_pin)
         end_pos = self._get_pos(self.end_item, self.end_pin)
 
         # Collect all component bboxes for routing
         all_bboxes = self._collect_bboxes()
 
-        # Route using the routing module
+        # Collect existing wire paths with net names
+        existing_wires = self._collect_other_wire_paths()
+
+        # Route using A* pathfinding (same-net bonus, other-net penalty)
         start_pt = Point(start_pos.x(), start_pos.y())
         end_pt = Point(end_pos.x(), end_pos.y())
-        waypoints = _route_edge(start_pt, end_pt, all_bboxes)
+        waypoints = _route_edge(
+            start_pt,
+            end_pt,
+            all_bboxes,
+            existing_wires=existing_wires,
+            grid_resolution=self._grid_resolution,
+            current_net=self.net,
+        )
 
         # Convert waypoints to path
         path = QPainterPath()
@@ -171,6 +220,33 @@ class WireItem(QGraphicsPathItem):
             path.lineTo(QPointF(pt.x, pt.y))
 
         self.setPath(path)
+
+    def update_position(self, grid_resolution: float = DEFAULT_GRID_RESOLUTION) -> None:
+        """Update wire path with debounced A* routing.
+
+        Shows a quick preview immediately, then runs full A* routing
+        after updates stop (timer resets on each call).
+        """
+        self._grid_resolution = grid_resolution
+
+        # Show quick preview immediately
+        self._show_preview()
+
+        # Create timer lazily, reuse it for debouncing
+        if self._route_timer is None:
+            self._route_timer = QTimer()
+            self._route_timer.setSingleShot(True)
+            self._route_timer.timeout.connect(self._run_astar_routing)
+
+        # Restart timer - this resets the delay on each update
+        self._route_timer.start(self.DEBOUNCE_MS)
+
+    def update_position_immediate(
+        self, grid_resolution: float = DEFAULT_GRID_RESOLUTION
+    ) -> None:
+        """Update wire path immediately with A* routing (no debounce)."""
+        self._grid_resolution = grid_resolution
+        self._run_astar_routing()
 
 
 class NetNodeItem(ConnectableItem):
@@ -391,8 +467,9 @@ class SymbolItem(ConnectableItem):
         self.orientation = orient % 360
         self.prepareGeometryChange()
         self.update()
+        # Use immediate routing for rotation (discrete action, not drag)
         for wire in self.connected_wires:
-            wire.update_position()
+            wire.update_position_immediate()
 
     def rotate_by(self, degrees: int) -> None:
         """Rotate by given degrees (snapped to 90)."""

@@ -144,9 +144,10 @@ class NetlistView(QtWidgets.QGraphicsView):
 
         # Re-route all wires using actual pin positions from SymbolItems
         # (routing.py uses component centers, not actual pin offsets)
+        # Use immediate routing for initial setup (no debounce)
         for wires in wires_by_net.values():
             for wire in wires:
-                wire.update_position()
+                wire.update_position_immediate()
 
         # Fit the view to show all items
         self.fitInView(
