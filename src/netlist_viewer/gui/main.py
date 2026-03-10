@@ -22,26 +22,18 @@ class HelpDialog(QtWidgets.QDialog):
         help_text = """
 <h3>Keyboard Shortcuts</h3>
 <table>
-<tr>
-    <td>R</td>
-    <td>Rotate selected component 90°</td>
-</tr>
+<tr><td><b>R</b></td><td>Rotate selected component 90°</td></tr>
+<tr><td><b>Ctrl+L</b></td><td>Re-layout (try new arrangement)</td></tr>
+<tr><td><b>Ctrl+R</b></td><td>Re-route all wires</td></tr>
+<tr><td><b>Ctrl+O</b></td><td>Open file</td></tr>
 </table>
 
 <h3>Mouse Controls</h3>
 <table>
-<tr>
-    <td>Left click</td>
-    <td>Select item</td>
-</tr>
-<tr>
-    <td>Right drag</td>
-    <td>Pan view</td>
-</tr>
-<tr>
-    <td>Scroll wheel</td>
-    <td>Zoom in/out</td>
-</tr>
+<tr><td><b>Left click</b></td><td>Select item</td></tr>
+<tr><td><b>Left drag</b></td><td>Move selected item</td></tr>
+<tr><td><b>Right drag</b></td><td>Pan view</td></tr>
+<tr><td><b>Scroll wheel</b></td><td>Zoom in/out</td></tr>
 </table>
 """
         label = QtWidgets.QLabel(help_text)
@@ -65,6 +57,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.view = NetlistView()
         self.setCentralWidget(self.view)
 
+        # State for re-layout
+        self._current_netlist = None  # Parsed Netlist for re-layout
+        self._layout_seed = 0  # Incrementing seed for different layouts
+
         # Create menu bar
         self._create_menus()
 
@@ -78,6 +74,19 @@ class MainWindow(QtWidgets.QMainWindow):
         open_action.setShortcut(QtGui.QKeySequence.StandardKey.Open)
         open_action.triggered.connect(self._open_file)
         file_menu.addAction(open_action)
+
+        # View menu
+        view_menu = menu_bar.addMenu("&View")
+
+        relayout_action = QtGui.QAction("&Re-layout", self)
+        relayout_action.setShortcut("Ctrl+L")
+        relayout_action.triggered.connect(self._relayout)
+        view_menu.addAction(relayout_action)
+
+        reroute_action = QtGui.QAction("Re-&route", self)
+        reroute_action.setShortcut("Ctrl+R")
+        reroute_action.triggered.connect(self._reroute)
+        view_menu.addAction(reroute_action)
 
         # Help menu
         help_menu = menu_bar.addMenu("&Help")
@@ -100,9 +109,11 @@ class MainWindow(QtWidgets.QMainWindow):
             text = Path(file_path).read_text()
             parser = SpiceParser()
             netlist = parser.parse(text)
-            placed = add_spring_locations(netlist)
+            self._current_netlist = netlist
+            self._layout_seed = 0
+            placed = add_spring_locations(netlist, seed=self._layout_seed)
             routed = route_netlist(placed)
-            self.load_netlist(routed)
+            self.view.load_netlist(routed)
             self.setWindowTitle(f"Netlist Viewer - {Path(file_path).name}")
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to load file:\n{e}")
@@ -111,8 +122,26 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = HelpDialog(self)
         dialog.exec()
 
+    def _relayout(self):
+        """Re-run spring layout with a new seed."""
+        if self._current_netlist is None:
+            return
+        self._layout_seed += 1
+        placed = add_spring_locations(
+            self._current_netlist, seed=self._layout_seed, force_spring=True
+        )
+        routed = route_netlist(placed)
+        self.view.load_netlist(routed)
+
+    def _reroute(self):
+        """Re-route all wires at current positions."""
+        self.view.reroute_all()
+
     def load_netlist(self, routed: RoutedNetlist):
         """Load a RoutedNetlist into the view."""
+        # Store the source netlist for re-layout
+        self._current_netlist = routed.source
+        self._layout_seed = 0
         self.view.load_netlist(routed)
 
 

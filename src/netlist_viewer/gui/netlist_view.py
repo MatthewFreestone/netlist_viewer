@@ -154,6 +154,12 @@ class NetlistView(QtWidgets.QGraphicsView):
             self._scene.itemsBoundingRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
         )
 
+    def reroute_all(self) -> None:
+        """Re-route all wires using A* pathfinding."""
+        for item in self._scene.items():
+            if isinstance(item, WireItem):
+                item.update_position_immediate()
+
     def _auto_orient_instances(
         self,
         routed: RoutedNetlist,

@@ -141,17 +141,28 @@ def _is_placed_list(
     return all(type(i) is PlacedInstance for i in items)
 
 
-def add_spring_locations(netlist: Netlist) -> PlacedNetlist:
-    """Use networkx to place netlist instances in a sensible location"""
+def add_spring_locations(
+    netlist: Netlist,
+    seed: int | None = 0,
+    force_spring: bool = False,
+) -> PlacedNetlist:
+    """Use networkx to place netlist instances in a sensible location.
+
+    Args:
+        netlist: The parsed netlist
+        seed: Random seed for spring layout. Use None for random, or increment
+              to try different layouts.
+        force_spring: If True, always use spring layout even if graph is planar.
+    """
     start_time = time.time()
     intermediate: NetlistGraph = NetlistGraph.from_netlist(netlist)
     no_hint_graph = intermediate.to_nx_graph(include_hints=False)
-    if nx.is_planar(no_hint_graph):
+    if not force_spring and nx.is_planar(no_hint_graph):
         pos = nx.planar_layout(no_hint_graph)
     else:
-        logging.info("Graph was not planar, using spring layout.")
+        logging.info("Using spring layout with seed=%s", seed)
         graph_rep = intermediate.to_nx_graph(include_hints=True)
-        pos = nx.spring_layout(graph_rep, method="energy", seed=0)
+        pos = nx.spring_layout(graph_rep, method="energy", seed=seed)
         # TODO: Try out spectral_layout, kamada_kawai_layout
     end_time = time.time()
     logging.info("Calculated layout in %f s", end_time - start_time)
